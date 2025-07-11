@@ -18,6 +18,10 @@ from linters.js_linter import run_js_linter
 from linters.html_linter import run_html_linter
 from linters.css_linter import run_css_linter
 from linters.yaml_linter import run_yaml_linter
+from linters.go_linter import GoLinter
+from linters.rust_linter import RustLinter
+from linters.java_linter import JavaLinter
+from linters.env_manager import EnvironmentManager
 from llm import generate_fix
 from git_utils import create_branch, apply_fixes, push_and_pr, commit_changes
 from logger import setup_logger
@@ -140,7 +144,7 @@ def generate_report(repo_path: Path, languages: Dict[str, List[Path]], all_issue
 @click.option('--repo', help='Path to the git repository')
 @click.option('--branch', default='codefixer-fixes', help='Branch name for fixes')
 @click.option('--model', default='gemma3:1b', help='Local LLM model to use')
-@click.option('--runner', default='ollama', help='LLM runner (llama.cpp, ollama)')
+@click.option('--runner', default='auto', help='LLM runner (auto, ollama, llama.cpp, vllm, lmstudio, huggingface)')
 @click.option('--no-push', is_flag=True, help='Skip pushing branch and creating PR')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without applying changes')
 @click.option('--output', type=click.Choice(['text', 'json']), default='text', help='Output format')
@@ -217,6 +221,9 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
     - HTML: htmlhint
     - CSS: stylelint
     - YAML: yamllint
+    - Go: golangci-lint
+    - Rust: clippy
+    - Java: PMD, Checkstyle
     
     For more information, visit: https://github.com/CrazyDubya/codefixer-cli
     """
@@ -319,6 +326,12 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
                 pbar.update(len(combined_files))
             all_issues.update(issues)
         
+        # Initialize environment manager and new linters
+        env_manager = EnvironmentManager()
+        go_linter = GoLinter(env_manager)
+        rust_linter = RustLinter(env_manager)
+        java_linter = JavaLinter(env_manager)
+        
         # Run other language linters
         for lang, files in other_languages.items():
             logger.info(f"Linting {lang} files...")
@@ -331,6 +344,12 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
                     issues = run_css_linter(files, repo_path)
                 elif lang == 'yaml':
                     issues = run_yaml_linter(files, repo_path)
+                elif lang == 'go':
+                    issues = go_linter.lint_files(repo_path, files)
+                elif lang == 'rust':
+                    issues = rust_linter.lint_files(repo_path, files)
+                elif lang == 'java':
+                    issues = java_linter.lint_files(repo_path, files)
                 else:
                     logger.warning(f"No linter available for {lang}")
                     continue

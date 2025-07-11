@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeFixer - Automated Code Fixing</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .step {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .results {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #007bff;
+            transition: width 0.3s;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 CodeFixer</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Automated code fixing with local LLMs - Privacy-first approach
+        </p>
+
+        <!-- Step 1: Upload Repository -->
+        <div class="step">
+            <h3>Step 1: Upload Repository</h3>
+            <div class="upload-area" id="uploadArea">
+                <p>📁 Drag and drop your repository ZIP file here</p>
+                <p>or</p>
+                <input type="file" id="fileInput" accept=".zip" style="display: none;">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">
+                    Choose ZIP File
+                </button>
+            </div>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <!-- Step 2: Analyze -->
+        <div class="step hidden" id="analyzeStep">
+            <h3>Step 2: Analyze Repository</h3>
+            <p>Detect languages and find linting issues in your code.</p>
+            <button class="btn" id="analyzeBtn" onclick="analyzeRepository()">
+                🔍 Analyze Repository
+            </button>
+            <div id="analyzeStatus"></div>
+        </div>
+
+        <!-- Step 3: Configure LLM -->
+        <div class="step hidden" id="configStep">
+            <h3>Step 3: Configure LLM</h3>
+            <div class="form-group">
+                <label for="runnerSelect">LLM Runner:</label>
+                <select id="runnerSelect" onchange="loadModels()">
+                    <option value="auto">Auto-detect</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="llama.cpp">llama.cpp</option>
+                    <option value="vllm">vLLM</option>
+                    <option value="lmstudio">LM Studio</option>
+                    <option value="huggingface">Hugging Face</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="modelSelect">Model:</label>
+                <select id="modelSelect">
+                    <option value="smollm2:135m">smollm2:135m (Recommended)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="timeoutInput">Timeout (seconds):</label>
+                <input type="number" id="timeoutInput" value="30" min="10" max="300">
+            </div>
+        </div>
+
+        <!-- Step 4: Generate Fixes -->
+        <div class="step hidden" id="fixStep">
+            <h3>Step 4: Generate Fixes</h3>
+            <p>Use the local LLM to generate fixes for the detected issues.</p>
+            <button class="btn btn-success" id="fixBtn" onclick="generateFixes()">
+                🛠️ Generate Fixes
+            </button>
+            <div id="fixStatus"></div>
+            <div class="progress hidden" id="progressBar">
+                <div class="progress-bar" id="progressBarFill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Step 5: Download Results -->
+        <div class="step hidden" id="downloadStep">
+            <h3>Step 5: Download Results</h3>
+            <p>Download the fixed files and analysis report.</p>
+            <button class="btn btn-success" onclick="downloadResults()">
+                📥 Download Fixed Files
+            </button>
+            <button class="btn btn-secondary" onclick="cleanupSession()">
+                🗑️ Clean Up Session
+            </button>
+        </div>
+
+        <!-- Results Display -->
+        <div id="results" class="results hidden">
+            <h3>Analysis Results</h3>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = 'session_' + Date.now();
+        let currentStep = 1;
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        function handleFileUpload(file) {
+            if (!file.name.endsWith('.zip')) {
+                showStatus('uploadStatus', 'Please select a ZIP file.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('session_id', sessionId);
+
+            showStatus('uploadStatus', 'Uploading repository...', 'info');
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('uploadStatus', 'Repository uploaded successfully!', 'success');
+                    showStep(2);
+                } else {
+                    showStatus('uploadStatus', 'Upload failed: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('uploadStatus', 'Upload failed: ' + error.message, 'error');
+            });
+        }
+
+        function analyzeRepository() {
+            showStatus('analyzeStatus', 'Analyzing repository...', 'info');
+
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('analyzeStatus', 
+                        `Analysis complete! Found ${data.total_issues} issues in ${data.files_with_issues} files across ${data.languages.length} languages.`, 
+                        'success'
+                    );
+                    displayResults(data);
+                    showStep(3);
+                } else {
+                    showStatus('analyzeStatus', 'Analysis failed: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('analyzeStatus', 'Analysis failed: ' + error.message, 'error');
+            });
+        }
+
+        function loadModels() {
+            const runner = document.getElementById('runnerSelect').value;
+            
+            fetch(`/api/models?runner=${runner}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modelSelect = document.getElementById('modelSelect');
+                    modelSelect.innerHTML = '';
+                    
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        modelSelect.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load models:', error);
+            });
+        }
+
+        function generateFixes() {
+            const model = document.getElementById('modelSelect').value;
+            const runner = document.getElementById('runnerSelect').value;
+            const timeout = document.getElementById('timeoutInput').value;
+
+            showStatus('fixStatus', 'Generating fixes...', 'info');
+            document.getElementById('progressBar').classList.remove('hidden');
+
+            fetch('/api/fix', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    model: model,
+                    runner: runner,
+                    timeout: parseInt(timeout)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('fixStatus', 
+                        `Fixes generated successfully! Fixed ${data.files_fixed} out of ${data.total_files_with_issues} files.`, 
+                        'success'
+                    );
+                    showStep(4);
+                } else {
+                    showStatus('fixStatus', 'Fix generation failed: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showStatus('fixStatus', 'Fix generation failed: ' + error.message, 'error');
+            })
+            .finally(() => {
+                document.getElementById('progressBar').classList.add('hidden');
+            });
+        }
+
+        function downloadResults() {
+            fetch('/api/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                }
+                throw new Error('Download failed');
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'codefixer-fixes.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            })
+            .catch(error => {
+                alert('Download failed: ' + error.message);
+            });
+        }
+
+        function cleanupSession() {
+            fetch('/api/cleanup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Cleanup failed:', error);
+            });
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('resultsContent');
+            
+            contentDiv.innerHTML = `
+                <p><strong>Languages detected:</strong> ${data.languages.join(', ')}</p>
+                <p><strong>Total files:</strong> ${data.total_files}</p>
+                <p><strong>Files with issues:</strong> ${data.files_with_issues}</p>
+                <p><strong>Total issues:</strong> ${data.total_issues}</p>
+            `;
+            
+            resultsDiv.classList.remove('hidden');
+        }
+
+        function showStep(step) {
+            // Hide all steps
+            for (let i = 1; i <= 5; i++) {
+                const stepElement = document.getElementById(`step${i}`);
+                if (stepElement) stepElement.classList.add('hidden');
+            }
+            
+            // Show steps up to current step
+            for (let i = 1; i <= step; i++) {
+                const stepElement = document.getElementById(`step${i}`);
+                if (stepElement) stepElement.classList.remove('hidden');
+            }
+            
+            currentStep = step;
+        }
+
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        // Initialize
+        loadModels();
+    </script>
+</body>
+</html> 

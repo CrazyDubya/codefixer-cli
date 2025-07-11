@@ -11,30 +11,35 @@ LANGUAGE_EXTENSIONS = {
     'python': ['.py', '.pyx', '.pyi'],
     'javascript': ['.js', '.jsx', '.mjs'],
     'typescript': ['.ts', '.tsx'],
-    'java': ['.java'],
-    'cpp': ['.cpp', '.cc', '.cxx', '.hpp', '.h'],
-    'c': ['.c', '.h'],
+    'html': ['.html', '.htm', '.xhtml'],
+    'css': ['.css', '.scss', '.sass', '.less'],
+    'yaml': ['.yml', '.yaml'],
     'go': ['.go'],
     'rust': ['.rs'],
-    'php': ['.php'],
-    'ruby': ['.rb'],
-    'swift': ['.swift'],
-    'kotlin': ['.kt', '.kts'],
-    'scala': ['.scala'],
-    'dart': ['.dart'],
-    'r': ['.r', '.R'],
-    'matlab': ['.m'],
-    'perl': ['.pl', '.pm'],
-    'shell': ['.sh', '.bash', '.zsh', '.fish'],
-    'powershell': ['.ps1'],
-    'yaml': ['.yml', '.yaml'],
+    'java': ['.java'],
+    'c': ['.c', '.h'],
+    'cpp': ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'],
+    'php': ['.php', '.phtml'],
+    'ruby': ['.rb', '.erb'],
+    'shell': ['.sh', '.bash', '.zsh', '.fish', '.ksh'],
+    'markdown': ['.md', '.markdown'],
     'json': ['.json'],
     'xml': ['.xml'],
-    'html': ['.html', '.htm'],
-    'css': ['.css', '.scss', '.sass', '.less'],
     'sql': ['.sql'],
     'dockerfile': ['Dockerfile', '.dockerfile'],
     'makefile': ['Makefile', 'makefile'],
+    'toml': ['.toml'],
+    'ini': ['.ini', '.cfg', '.conf'],
+    'properties': ['.properties'],
+    'gradle': ['.gradle', '.gradle.kts'],
+    'maven': ['pom.xml'],
+    'npm': ['package.json'],
+    'cargo': ['Cargo.toml'],
+    'go_mod': ['go.mod'],
+    'requirements': ['requirements.txt', 'pyproject.toml', 'setup.py', 'Pipfile', 'poetry.lock'],
+    'gemfile': ['Gemfile', 'Gemfile.lock'],
+    'composer': ['composer.json', 'composer.lock'],
+    'pubspec': ['pubspec.yaml', 'pubspec.lock'],
 }
 
 # Files to ignore
@@ -45,9 +50,9 @@ IGNORE_PATTERNS = [
     '.venv',
     'venv',
     'env',
-    'build',
-    'dist',
-    'target',
+    '/build/',
+    '/dist/',
+    '/target/',
     '.pytest_cache',
     '.coverage',
     '*.pyc',
@@ -112,16 +117,20 @@ def detect_languages(repo_path: Path) -> Dict[str, List[Path]]:
             if not file_path.is_file() or should_ignore(file_path):
                 continue
             
-            # Check file extension
+            # Check file extension and name
             file_ext = file_path.suffix.lower()
-            file_name = file_path.name.lower()
+            file_name = file_path.name
+            file_name_lower = file_name.lower()
             
-            # Try to match by extension first
-            if file_ext in ext_to_lang:
-                lang = ext_to_lang[file_ext]
-            # Try to match by filename (for files like Dockerfile, Makefile)
-            elif file_name in ext_to_lang:
+            # Try to match by exact filename first (for files like Dockerfile, Makefile, package.json)
+            if file_name in ext_to_lang:
                 lang = ext_to_lang[file_name]
+            # Try to match by lowercase filename
+            elif file_name_lower in ext_to_lang:
+                lang = ext_to_lang[file_name_lower]
+            # Try to match by extension
+            elif file_ext in ext_to_lang:
+                lang = ext_to_lang[file_ext]
             else:
                 continue
             

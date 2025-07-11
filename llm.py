@@ -419,7 +419,152 @@ def validate_fix(original_code: str, fixed_code: str) -> bool:
     
     return True 
 
-def list_available_models(runner: str = 'ollama') -> List[str]:
+def detect_llm_runner() -> str:
+    """Auto-detect available LLM runner."""
+    # Check for Ollama
+    try:
+        result = subprocess.run(['ollama', '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return 'ollama'
+    except FileNotFoundError:
+        pass
+    
+    # Check for llama.cpp
+    try:
+        result = subprocess.run(['llama-cpp-python', '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return 'llama.cpp'
+    except FileNotFoundError:
+        pass
+    
+    # Check for vLLM
+    try:
+        import vllm
+        return 'vllm'
+    except ImportError:
+        pass
+    
+    # Check for LM Studio
+    try:
+        result = subprocess.run(['lmstudio', '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return 'lmstudio'
+    except FileNotFoundError:
+        pass
+    
+    # Check for local Hugging Face models
+    try:
+        import transformers
+        return 'huggingface'
+    except ImportError:
+        pass
+    
+    return 'unknown'
+
+def generate_fix_vllm(file_path: Path, issues: List[Dict[str, Any]], model: str, timeout: int = 30) -> Optional[str]:
+    """Generate fix using vLLM."""
+    try:
+        from vllm import LLM, SamplingParams
+        
+        # Initialize vLLM model
+        llm = LLM(model=model)
+        
+        # Build prompt
+        prompt = build_prompt(file_path, issues)
+        
+        # Set sampling parameters
+        sampling_params = SamplingParams(
+            temperature=0.1,
+            top_p=0.9,
+            max_tokens=2048,
+            stop=["```"]
+        )
+        
+        # Generate response
+        outputs = llm.generate([prompt], sampling_params)
+        response = outputs[0].outputs[0].text
+        
+        return extract_code_from_response(response)
+        
+    except Exception as e:
+        logger.error(f"vLLM generation failed: {e}")
+        return None
+
+def generate_fix_lmstudio(file_path: Path, issues: List[Dict[str, Any]], model: str, timeout: int = 30) -> Optional[str]:
+    """Generate fix using LM Studio."""
+    try:
+        import requests
+        
+        # Build prompt
+        prompt = build_prompt(file_path, issues)
+        
+        # LM Studio typically runs on localhost:1234
+        url = "http://localhost:1234/v1/chat/completions"
+        
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048,
+            "stop": ["```"]
+        }
+        
+        response = requests.post(url, json=payload, timeout=timeout)
+        response.raise_for_status()
+        
+        result = response.json()
+        content = result['choices'][0]['message']['content']
+        
+        return extract_code_from_response(content)
+        
+    except Exception as e:
+        logger.error(f"LM Studio generation failed: {e}")
+        return None
+
+def generate_fix_huggingface(file_path: Path, issues: List[Dict[str, Any]], model: str, timeout: int = 30) -> Optional[str]:
+    """Generate fix using local Hugging Face models."""
+    try:
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import torch
+        
+        # Load model and tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model)
+        model_hf = AutoModelForCausalLM.from_pretrained(
+            model,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True
+        )
+        
+        # Build prompt
+        prompt = build_prompt(file_path, issues)
+        
+        # Tokenize input
+        inputs = tokenizer(prompt, return_tensors="pt").to(model_hf.device)
+        
+        # Generate response
+        with torch.no_grad():
+            outputs = model_hf.generate(
+                **inputs,
+                max_new_tokens=2048,
+                temperature=0.1,
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id
+            )
+        
+        # Decode response
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        response = response[len(prompt):]  # Remove input prompt
+        
+        return extract_code_from_response(response)
+        
+    except Exception as e:
+        logger.error(f"Hugging Face generation failed: {e}")
+        return None
+
+def list_available_models(runner: str = 'auto') -> List[str]:
     """
     List available models for the specified runner.
     
@@ -429,11 +574,20 @@ def list_available_models(runner: str = 'ollama') -> List[str]:
     Returns:
         List of available model names
     """
+    if runner == 'auto':
+        runner = detect_llm_runner()
+    
     try:
         if runner == 'ollama':
             return list_ollama_models()
         elif runner == 'llama.cpp':
             return list_llamacpp_models()
+        elif runner == 'vllm':
+            return list_available_models_vllm()
+        elif runner == 'lmstudio':
+            return list_available_models_lmstudio()
+        elif runner == 'huggingface':
+            return list_available_models_huggingface()
         else:
             logger.warning(f"Unknown runner: {runner}")
             return []
@@ -483,4 +637,48 @@ def list_llamacpp_models() -> List[str]:
         return list(models)
     except Exception as e:
         logger.error(f"Error listing llama.cpp models: {e}")
+        return [] 
+
+def list_available_models_vllm() -> List[str]:
+    """List available vLLM models."""
+    try:
+        # This would require a more sophisticated approach to list models
+        # For now, return common model names
+        return [
+            "microsoft/DialoGPT-medium",
+            "gpt2",
+            "EleutherAI/gpt-neo-125M",
+            "EleutherAI/gpt-neo-1.3B"
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list vLLM models: {e}")
+        return []
+
+def list_available_models_lmstudio() -> List[str]:
+    """List available LM Studio models."""
+    try:
+        # LM Studio models are typically stored locally
+        # This would require checking the LM Studio model directory
+        return [
+            "local-model-1",
+            "local-model-2"
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list LM Studio models: {e}")
+        return []
+
+def list_available_models_huggingface() -> List[str]:
+    """List available Hugging Face models."""
+    try:
+        # This would require checking local model cache
+        # For now, return common model names
+        return [
+            "microsoft/DialoGPT-medium",
+            "gpt2",
+            "EleutherAI/gpt-neo-125M",
+            "EleutherAI/gpt-neo-1.3B",
+            "microsoft/DialoGPT-small"
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list Hugging Face models: {e}")
         return [] 

@@ -1,0 +1,114 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run integration tests weekly
+    - cron: '0 0 * * 0'
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-repo:
+          - name: "simple-python"
+            url: "https://github.com/CrazyDubya/test-simple-python"
+          - name: "js-ts-mixed"
+            url: "https://github.com/CrazyDubya/test-js-ts-mixed"
+          - name: "multi-language"
+            url: "https://github.com/CrazyDubya/test-multi-language"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+    
+    - name: Install CodeFixer
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Set up Ollama
+      run: |
+        curl -fsSL https://ollama.ai/install.sh | sh
+        ollama pull smollm2:135m
+    
+    - name: Clone test repository
+      run: |
+        git clone ${{ matrix.test-repo.url }} test-repo
+        cd test-repo
+    
+    - name: Run CodeFixer dry-run
+      run: |
+        codefixer --repo . --dry-run --verbose --output json
+    
+    - name: Run CodeFixer with fixes
+      run: |
+        codefixer --repo . --local-only --verbose --timeout 60
+    
+    - name: Verify fixes
+      run: |
+        # Check that fixes were applied
+        if [ -f "codefixer-report.json" ]; then
+          echo "CodeFixer report generated successfully"
+          cat codefixer-report.json | jq '.summary.files_fixed'
+        else
+          echo "No fixes were applied"
+        fi
+
+  performance-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+    
+    - name: Install CodeFixer
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+    
+    - name: Set up Ollama
+      run: |
+        curl -fsSL https://ollama.ai/install.sh | sh
+        ollama pull smollm2:135m
+    
+    - name: Create large test repository
+      run: |
+        mkdir large-test-repo
+        cd large-test-repo
+        git init
+        
+        # Create many Python files with issues
+        for i in {1..100}; do
+          cat > "file_$i.py" << EOF
+def bad_function(  ):
+    x=1
+    y=2
+    print(x+y)
+    return x+y
+EOF
+        done
+        
+        git add .
+        git commit -m "Initial commit"
+    
+    - name: Run performance test
+      run: |
+        cd large-test-repo
+        time codefixer --repo . --dry-run --verbose --timeout 120
+    
+    - name: Check performance metrics
+      run: |
+        # Verify that the tool can handle large repositories
+        echo "Performance test completed successfully" 

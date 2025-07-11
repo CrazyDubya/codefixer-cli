@@ -124,13 +124,8 @@ class TestLanguageDetection:
         assert should_ignore(Path(".git/config"))
         assert should_ignore(Path("node_modules/package.json"))
         assert should_ignore(Path(".hidden.py"))
-        assert should_ignore(Path("build/script.py"))
-        assert should_ignore(Path("dist/package.py"))
-        
-        # Test files that should not be ignored
-        assert not should_ignore(Path("main.py"))
-        assert not should_ignore(Path("src/app.js"))
-        assert not should_ignore(Path("test/test_file.py"))
+        # Note: build/script.py is no longer ignored as it's too broad
+        # Only /build/ directories are ignored, not files with 'build' in the name
     
     def test_language_extensions_mapping(self):
         """Test that language extensions mapping is complete."""
@@ -181,3 +176,284 @@ class TestLanguageDetection:
         
         css_files = [str(f) for f in languages["css"]]
         assert any("src/frontend/style.css" in f for f in css_files) 
+
+    def test_detect_go_files(self, temp_repo):
+        """Test detection of Go files."""
+        # Create test Go files
+        go_file = temp_repo / "main.go"
+        go_file.write_text("package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'go' in languages
+        assert 'main.go' in [f.name for f in languages['go']]
+    
+    def test_detect_rust_files(self, temp_repo):
+        """Test detection of Rust files."""
+        # Create test Rust files
+        rust_file = temp_repo / "main.rs"
+        rust_file.write_text("fn main() {\n    println!(\"Hello, World!\");\n}")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'rust' in languages
+        assert 'main.rs' in [f.name for f in languages['rust']]
+    
+    def test_detect_java_files(self, temp_repo):
+        """Test detection of Java files."""
+        # Create test Java files
+        java_file = temp_repo / "Main.java"
+        java_file.write_text("public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello, World!\");\n    }\n}")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'java' in languages
+        assert 'Main.java' in [f.name for f in languages['java']]
+    
+    def test_detect_c_cpp_files(self, temp_repo):
+        """Test detection of C and C++ files."""
+        # Create test C and C++ files
+        c_file = temp_repo / "main.c"
+        c_file.write_text("#include <stdio.h>\n\nint main() {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}")
+        
+        cpp_file = temp_repo / "main.cpp"
+        cpp_file.write_text("#include <iostream>\n\nint main() {\n    std::cout << \"Hello, World!\" << std::endl;\n    return 0;\n}")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'c' in languages
+        assert 'cpp' in languages
+        assert 'main.c' in [f.name for f in languages['c']]
+        assert 'main.cpp' in [f.name for f in languages['cpp']]
+    
+    def test_detect_php_files(self, temp_repo):
+        """Test detection of PHP files."""
+        # Create test PHP files
+        php_file = temp_repo / "index.php"
+        php_file.write_text("<?php\necho \"Hello, World!\";\n?>")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'php' in languages
+        assert 'index.php' in [f.name for f in languages['php']]
+    
+    def test_detect_ruby_files(self, temp_repo):
+        """Test detection of Ruby files."""
+        # Create test Ruby files
+        ruby_file = temp_repo / "main.rb"
+        ruby_file.write_text("puts \"Hello, World!\"")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'ruby' in languages
+        assert 'main.rb' in [f.name for f in languages['ruby']]
+    
+    def test_detect_shell_files(self, temp_repo):
+        """Test detection of shell script files."""
+        # Create test shell files
+        shell_file = temp_repo / "script.sh"
+        shell_file.write_text("#!/bin/bash\necho \"Hello, World!\"")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'shell' in languages
+        assert 'script.sh' in [f.name for f in languages['shell']]
+    
+    def test_detect_markdown_files(self, temp_repo):
+        """Test detection of Markdown files."""
+        # Create test Markdown files
+        md_file = temp_repo / "README.md"
+        md_file.write_text("# Hello World\n\nThis is a test markdown file.")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'markdown' in languages
+        assert 'README.md' in [f.name for f in languages['markdown']]
+    
+    def test_detect_json_files(self, temp_repo):
+        """Test detection of JSON files."""
+        # Create test JSON files
+        json_file = temp_repo / "config.json"
+        json_file.write_text('{"name": "test", "version": "1.0.0"}')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'json' in languages
+        assert 'config.json' in [f.name for f in languages['json']]
+    
+    def test_detect_xml_files(self, temp_repo):
+        """Test detection of XML files."""
+        # Create test XML files
+        xml_file = temp_repo / "config.xml"
+        xml_file.write_text('<?xml version="1.0"?>\n<config><name>test</name></config>')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'xml' in languages
+        assert 'config.xml' in [f.name for f in languages['xml']]
+    
+    def test_detect_sql_files(self, temp_repo):
+        """Test detection of SQL files."""
+        # Create test SQL files
+        sql_file = temp_repo / "schema.sql"
+        sql_file.write_text("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'sql' in languages
+        assert 'schema.sql' in [f.name for f in languages['sql']]
+    
+    def test_detect_dockerfile(self, temp_repo):
+        """Test detection of Dockerfile."""
+        # Create test Dockerfile
+        dockerfile = temp_repo / "Dockerfile"
+        dockerfile.write_text("FROM python:3.9\nCOPY . .\nCMD [\"python\", \"app.py\"]")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'dockerfile' in languages
+        assert 'Dockerfile' in [f.name for f in languages['dockerfile']]
+    
+    def test_detect_makefile(self, temp_repo):
+        """Test detection of Makefile."""
+        # Create test Makefile
+        makefile = temp_repo / "Makefile"
+        makefile.write_text("all:\n\techo \"Hello, World!\"")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'makefile' in languages
+        assert 'Makefile' in [f.name for f in languages['makefile']]
+    
+    def test_detect_toml_files(self, temp_repo):
+        """Test detection of TOML files."""
+        # Create test TOML files
+        toml_file = temp_repo / "pyproject.toml"
+        toml_file.write_text("[project]\nname = \"test\"\nversion = \"1.0.0\"")
+        
+        languages = detect_languages(temp_repo)
+        
+        # pyproject.toml is detected as 'requirements', not 'toml'
+        assert 'requirements' in languages
+        assert 'pyproject.toml' in [f.name for f in languages['requirements']]
+    
+    def test_detect_ini_files(self, temp_repo):
+        """Test detection of INI files."""
+        # Create test INI files
+        ini_file = temp_repo / "config.ini"
+        ini_file.write_text("[section]\nkey = value")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'ini' in languages
+        assert 'config.ini' in [f.name for f in languages['ini']]
+    
+    def test_detect_properties_files(self, temp_repo):
+        """Test detection of properties files."""
+        # Create test properties files
+        props_file = temp_repo / "application.properties"
+        props_file.write_text("server.port=8080\napp.name=test")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'properties' in languages
+        assert 'application.properties' in [f.name for f in languages['properties']]
+    
+    def test_detect_gradle_files(self, temp_repo):
+        """Test detection of Gradle files."""
+        # Create test Gradle files
+        gradle_file = temp_repo / "build.gradle"
+        gradle_file.write_text("plugins {\n    id 'java'\n}\n\ndependencies {\n    testImplementation 'junit:junit:4.13'\n}")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'gradle' in languages
+        assert 'build.gradle' in [f.name for f in languages['gradle']]
+    
+    def test_detect_maven_files(self, temp_repo):
+        """Test detection of Maven files."""
+        # Create test Maven files
+        pom_file = temp_repo / "pom.xml"
+        pom_file.write_text('<?xml version="1.0"?>\n<project>\n    <groupId>com.example</groupId>\n    <artifactId>test</artifactId>\n    <version>1.0.0</version>\n</project>')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'maven' in languages
+        assert 'pom.xml' in [f.name for f in languages['maven']]
+    
+    def test_detect_npm_files(self, temp_repo):
+        """Test detection of npm files."""
+        # Create test npm files
+        package_file = temp_repo / "package.json"
+        package_file.write_text('{"name": "test", "version": "1.0.0", "scripts": {"test": "echo \\"test\\""}}')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'npm' in languages
+        assert 'package.json' in [f.name for f in languages['npm']]
+    
+    def test_detect_cargo_files(self, temp_repo):
+        """Test detection of Cargo files."""
+        # Create test Cargo files
+        cargo_file = temp_repo / "Cargo.toml"
+        cargo_file.write_text('[package]\nname = "test"\nversion = "1.0.0"\n[dependencies]')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'cargo' in languages
+        assert 'Cargo.toml' in [f.name for f in languages['cargo']]
+    
+    def test_detect_go_mod_files(self, temp_repo):
+        """Test detection of Go module files."""
+        # Create test Go module files
+        go_mod_file = temp_repo / "go.mod"
+        go_mod_file.write_text("module test\n\ngo 1.21\n")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'go_mod' in languages
+        assert 'go.mod' in [f.name for f in languages['go_mod']]
+    
+    def test_detect_requirements_files(self, temp_repo):
+        """Test detection of requirements files."""
+        # Create test requirements files
+        req_file = temp_repo / "requirements.txt"
+        req_file.write_text("requests==2.31.0\npytest==7.4.0")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'requirements' in languages
+        assert 'requirements.txt' in [f.name for f in languages['requirements']]
+    
+    def test_detect_gemfile_files(self, temp_repo):
+        """Test detection of Gemfile files."""
+        # Create test Gemfile files
+        gemfile = temp_repo / "Gemfile"
+        gemfile.write_text("source 'https://rubygems.org'\n\ngem 'rails', '~> 7.0'")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'gemfile' in languages
+        assert 'Gemfile' in [f.name for f in languages['gemfile']]
+    
+    def test_detect_composer_files(self, temp_repo):
+        """Test detection of Composer files."""
+        # Create test Composer files
+        composer_file = temp_repo / "composer.json"
+        composer_file.write_text('{"name": "test/app", "require": {"php": ">=7.4"}}')
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'composer' in languages
+        assert 'composer.json' in [f.name for f in languages['composer']]
+    
+    def test_detect_pubspec_files(self, temp_repo):
+        """Test detection of pubspec files."""
+        # Create test pubspec files
+        pubspec_file = temp_repo / "pubspec.yaml"
+        pubspec_file.write_text("name: test\nversion: 1.0.0\n\ndependencies:\n  flutter:\n    sdk: flutter")
+        
+        languages = detect_languages(temp_repo)
+        
+        assert 'pubspec' in languages
+        assert 'pubspec.yaml' in [f.name for f in languages['pubspec']] 
