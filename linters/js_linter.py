@@ -38,52 +38,17 @@ def setup_js_env(temp_dir: Path) -> bool:
             "npm", "install", "--save-dev", "eslint", "prettier", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin"
         ], cwd=temp_dir, check=True, capture_output=True)
         
-        # Create basic ESLint config
-        eslint_config = {
-            "env": {
-                "browser": True,
-                "es2021": True,
-                "node": True
-            },
-            "extends": [
-                "eslint:recommended",
-                "@typescript-eslint/recommended"
-            ],
-            "parser": "@typescript-eslint/parser",
-            "parserOptions": {
-                "ecmaVersion": "latest",
-                "sourceType": "module"
-            },
-            "plugins": [
-                "@typescript-eslint"
-            ],
-            "rules": {
-                "indent": ["error", 2],
-                "linebreak-style": ["error", "unix"],
-                "quotes": ["error", "single"],
-                "semi": ["error", "always"]
-            }
-        }
-        
-        with open(temp_dir / ".eslintrc.json", "w") as f:
-            json.dump(eslint_config, f, indent=2)
-        
-        # Create basic Prettier config
-        prettier_config = {
-            "semi": True,
-            "trailingComma": "es5",
-            "singleQuote": True,
-            "printWidth": 80,
-            "tabWidth": 2
-        }
-        
-        with open(temp_dir / ".prettierrc.json", "w") as f:
-            json.dump(prettier_config, f, indent=2)
+        # Generate configs using the centralized config generator
+        from .configs import generate_js_configs
+        generate_js_configs(temp_dir)
         
         return True
         
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to setup JavaScript environment: {e}")
+        if e.stderr:
+            logger.error(f"stderr: {e.stderr.decode()}")
+        logger.info("Please ensure Node.js and npm are installed and accessible")
         return False
 
 def run_eslint(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
@@ -135,7 +100,7 @@ def run_eslint(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
 
 def parse_eslint_text_output(output: str, file_path: Path) -> List[Dict[str, Any]]:
     """
-    Parse ESLint text output when JSON is not available.
+    Parse ESLint text output with robust handling of whitespace, severity, and formatting.
     
     Args:
         output: ESLint text output
@@ -144,27 +109,24 @@ def parse_eslint_text_output(output: str, file_path: Path) -> List[Dict[str, Any
     Returns:
         List of linting issues
     """
+    import re
     issues = []
     
+    # Pattern to match ESLint output: file:line:col  severity  message  (rule)
+    pattern = r'^(.+):(\d+):(\d+)\s+(error|warn|warning)?\s*(.+?)\s*\((\w+)\)$'
+    
     for line in output.strip().split('\n'):
-        if not line or ':' not in line:
+        if not line or line.startswith('#'):
             continue
             
-        # Parse ESLint output format: file:line:col: message (rule)
-        parts = line.split(':', 3)
-        if len(parts) >= 4:
+        match = re.match(pattern, line)
+        if match:
             try:
-                line_num = int(parts[1])
-                col_num = int(parts[2])
-                message_part = parts[3].strip()
-                
-                # Extract message and rule
-                if ' (' in message_part and message_part.endswith(')'):
-                    message, rule = message_part.rsplit(' (', 1)
-                    rule = rule.rstrip(')')
-                else:
-                    message = message_part
-                    rule = "unknown"
+                line_num = int(match.group(2))
+                col_num = int(match.group(3))
+                severity = match.group(4) or "error"
+                message = match.group(5).strip()
+                rule = match.group(6)
                 
                 issues.append({
                     "path": str(file_path),
@@ -175,6 +137,32 @@ def parse_eslint_text_output(output: str, file_path: Path) -> List[Dict[str, Any
                 })
             except (ValueError, IndexError):
                 continue
+        else:
+            # Fallback for simpler formats: file:line:col: message (rule)
+            parts = line.split(':', 3)
+            if len(parts) >= 4:
+                try:
+                    line_num = int(parts[1])
+                    col_num = int(parts[2])
+                    message_part = parts[3].strip()
+                    
+                    # Extract message and rule
+                    if ' (' in message_part and message_part.endswith(')'):
+                        message, rule = message_part.rsplit(' (', 1)
+                        rule = rule.rstrip(')')
+                    else:
+                        message = message_part
+                        rule = "unknown"
+                    
+                    issues.append({
+                        "path": str(file_path),
+                        "row": line_num,
+                        "col": col_num,
+                        "code": rule,
+                        "text": message
+                    })
+                except (ValueError, IndexError):
+                    continue
     
     return issues
 

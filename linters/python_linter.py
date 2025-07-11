@@ -43,6 +43,9 @@ def setup_python_env(temp_dir: Path) -> bool:
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to setup Python environment: {e}")
+        if e.stderr:
+            logger.error(f"stderr: {e.stderr.decode()}")
+        logger.info("Please ensure Python 3.8+ is installed and accessible")
         return False
 
 def run_flake8(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
@@ -53,37 +56,37 @@ def run_flake8(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
             flake8_path = temp_dir / "venv" / "bin" / "flake8"
         result = subprocess.run([
             str(flake8_path),
-            "--format=json",
             "--config", str(temp_dir / ".flake8"),
             str(file_path)
         ], capture_output=True, text=True)
         if result.returncode == 0:
             return []
-        try:
-            issues = json.loads(result.stdout)
-            return issues
-        except json.JSONDecodeError:
-            return parse_flake8_text_output(result.stdout, file_path)
+        # Always use text output parsing since flake8 doesn't support JSON natively
+        return parse_flake8_text_output(result.stdout, file_path)
     except subprocess.CalledProcessError as e:
         logger.error(f"Flake8 failed for {file_path}: {e}")
         return []
 
 def parse_flake8_text_output(output: str, file_path: Path) -> List[Dict[str, Any]]:
+    """Parse flake8 text output with robust handling of whitespace and formatting."""
+    import re
     issues = []
+    
+    # Pattern to match flake8 output: file:line:col: code message
+    pattern = r'^(.+):(\d+):(\d+):\s*(\w+)\s+(.+)$'
+    
     for line in output.strip().split('\n'):
-        if not line:
+        if not line or line.startswith('#'):
             continue
-        parts = line.split(':', 3)
-        if len(parts) >= 4:
+            
+        match = re.match(pattern, line)
+        if match:
             try:
-                line_num = int(parts[1])
-                col_num = int(parts[2])
-                code_and_message = parts[3].strip()
-                if ' ' in code_and_message:
-                    code, message = code_and_message.split(' ', 1)
-                else:
-                    code = code_and_message
-                    message = ""
+                line_num = int(match.group(2))
+                col_num = int(match.group(3))
+                code = match.group(4)
+                message = match.group(5).strip()
+                
                 issues.append({
                     "path": str(file_path),
                     "row": line_num,
@@ -93,6 +96,29 @@ def parse_flake8_text_output(output: str, file_path: Path) -> List[Dict[str, Any
                 })
             except (ValueError, IndexError):
                 continue
+        else:
+            # Fallback for non-standard formats
+            parts = line.split(':', 3)
+            if len(parts) >= 4:
+                try:
+                    line_num = int(parts[1])
+                    col_num = int(parts[2])
+                    code_and_message = parts[3].strip()
+                    if ' ' in code_and_message:
+                        code, message = code_and_message.split(' ', 1)
+                    else:
+                        code = code_and_message
+                        message = ""
+                    issues.append({
+                        "path": str(file_path),
+                        "row": line_num,
+                        "col": col_num,
+                        "code": code,
+                        "text": message
+                    })
+                except (ValueError, IndexError):
+                    continue
+    
     return issues
 
 def run_black_check(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:

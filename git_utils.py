@@ -91,13 +91,16 @@ def apply_fixes(repo_path: Path, fixes: Dict[str, str]) -> bool:
     """
     try:
         repo = Repo(repo_path)
+        backups = {}  # Track backup files for cleanup/rollback
         
         # Apply each fix
         for file_path_str, fixed_code in fixes.items():
             file_path = Path(file_path_str)
             
             # Create backup
-            backup_file(file_path)
+            backup_path = backup_file(file_path)
+            if backup_path:
+                backups[str(file_path)] = backup_path
             
             # Write fixed code
             try:
@@ -106,6 +109,8 @@ def apply_fixes(repo_path: Path, fixes: Dict[str, str]) -> bool:
                 logger.debug(f"Applied fix to {file_path}")
             except Exception as e:
                 logger.error(f"Failed to write fix to {file_path}: {e}")
+                # Rollback on failure
+                _rollback_fixes(backups)
                 return False
         
         # Add all changes
@@ -115,12 +120,38 @@ def apply_fixes(repo_path: Path, fixes: Dict[str, str]) -> bool:
         commit_message = f"Auto fixes by CodeFixer\n\nFixed {len(fixes)} files with linting issues"
         repo.index.commit(commit_message)
         
+        # Clean up backup files after successful commit
+        _cleanup_backups(backups)
+        
         logger.info(f"Committed fixes for {len(fixes)} files")
         return True
         
     except Exception as e:
         logger.error(f"Failed to apply fixes: {e}")
+        # Rollback on any exception
+        _rollback_fixes(backups)
         return False
+
+def _rollback_fixes(backups: Dict[str, Path]) -> None:
+    """Rollback fixes by restoring from backup files."""
+    for file_path_str, backup_path in backups.items():
+        try:
+            file_path = Path(file_path_str)
+            if backup_path.exists():
+                shutil.copy2(backup_path, file_path)
+                logger.debug(f"Rolled back {file_path} from backup")
+        except Exception as e:
+            logger.error(f"Failed to rollback {file_path_str}: {e}")
+
+def _cleanup_backups(backups: Dict[str, Path]) -> None:
+    """Clean up backup files after successful commit."""
+    for backup_path in backups.values():
+        try:
+            if backup_path.exists():
+                backup_path.unlink()
+                logger.debug(f"Cleaned up backup: {backup_path}")
+        except Exception as e:
+            logger.error(f"Failed to cleanup backup {backup_path}: {e}")
 
 def detect_remote_host(repo_path: Path) -> Optional[str]:
     """
@@ -215,6 +246,14 @@ This PR contains automated fixes for linting issues detected by CodeFixer.
                 for issue in file_issues:
                     body += f"- Line {issue.get('row', '?')}: {issue.get('code', 'unknown')} - {issue.get('text', '')}\n"
         
+        # Check if GitHub CLI is available
+        import shutil
+        if not shutil.which('gh'):
+            logger.error("GitHub CLI (gh) not found. Please install it or create PR manually.")
+            logger.info("Install GitHub CLI: https://cli.github.com/")
+            logger.info(f"Then run: gh pr create --title '{title}' --body '...' --head {branch_name}")
+            return None
+        
         # Create PR using GitHub CLI
         result = subprocess.run([
             "gh", "pr", "create",
@@ -234,6 +273,7 @@ This PR contains automated fixes for linting issues detected by CodeFixer.
             return "PR created successfully"
         else:
             logger.error(f"Failed to create GitHub PR: {result.stderr}")
+            logger.info("You may need to authenticate with: gh auth login")
             return None
             
     except Exception as e:

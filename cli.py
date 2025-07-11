@@ -117,6 +117,12 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
         logger.error(f"Not a git repository: {repo}")
         sys.exit(1)
     
+    # Check if repository is clean
+    from git_utils import check_repo_clean
+    if not check_repo_clean(repo_path):
+        logger.error(f"Repository has uncommitted changes. Please commit or stash them first.")
+        sys.exit(1)
+    
     try:
         # Phase 1: Detect languages
         logger.info("Detecting languages...")
@@ -129,12 +135,33 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
         
         # Phase 2: Run linters
         all_issues = {}
+        
+        # Handle JS/TS together to avoid redundant linting
+        js_files = []
+        ts_files = []
+        other_languages = {}
+        
         for lang, files in languages.items():
+            if lang == 'javascript':
+                js_files.extend(files)
+            elif lang == 'typescript':
+                ts_files.extend(files)
+            else:
+                other_languages[lang] = files
+        
+        # Run JS/TS linter once if we have JS or TS files
+        if js_files or ts_files:
+            logger.info("Linting JavaScript/TypeScript files...")
+            all_js_ts_files = js_files + ts_files
+            issues = run_js_linter(all_js_ts_files, repo_path)
+            if issues:
+                all_issues.update(issues)
+        
+        # Run other language linters
+        for lang, files in other_languages.items():
             logger.info(f"Linting {lang} files...")
             if lang == 'python':
                 issues = run_python_linter(files, repo_path)
-            elif lang in ['javascript', 'typescript']:
-                issues = run_js_linter(files, repo_path)
             elif lang == 'html':
                 issues = run_html_linter(files, repo_path)
             elif lang == 'css':
@@ -188,7 +215,15 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
                         diff = list(difflib.unified_diff(original, fixed, fromfile=f"a/{file_path}", tofile=f"b/{file_path}", lineterm=''))
                         logger.info(f"Diff for {file_path}:")
                         for line in diff:
-                            print(line)
+                            # Add colors for diff output
+                            if line.startswith('+'):
+                                print(f"\033[32m{line}\033[0m")  # Green for additions
+                            elif line.startswith('-'):
+                                print(f"\033[31m{line}\033[0m")  # Red for deletions
+                            elif line.startswith('@'):
+                                print(f"\033[36m{line}\033[0m")  # Cyan for context
+                            else:
+                                print(line)
                         num_changed_lines = sum(1 for l in diff if l.startswith('+') or l.startswith('-'))
                     except Exception as e:
                         logger.warning(f"Could not show diff for {file_path}: {e}")

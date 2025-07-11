@@ -33,15 +33,23 @@ def load_prompt_template() -> str:
     Returns:
         Prompt template string
     """
-    template_path = Path("templates/fix_prompt.txt")
+    # Try multiple possible template locations
+    template_paths = [
+        Path("templates/fix_prompt.txt"),
+        Path(__file__).parent / "templates" / "fix_prompt.txt",
+        Path.cwd() / "templates" / "fix_prompt.txt"
+    ]
     
-    if template_path.exists():
-        try:
-            with open(template_path, "r") as f:
-                return f.read()
-        except Exception as e:
-            logger.warning(f"Failed to load prompt template: {e}")
+    for template_path in template_paths:
+        if template_path.exists():
+            try:
+                with open(template_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                logger.warning(f"Failed to load prompt template from {template_path}: {e}")
+                continue
     
+    logger.info("Using default prompt template (templates/fix_prompt.txt not found)")
     return DEFAULT_PROMPT_TEMPLATE
 
 def build_prompt(file_path: Path, issues: List[Dict[str, Any]]) -> str:
@@ -110,7 +118,8 @@ def run_llama_cpp(prompt: str, model: str) -> Optional[str]:
             logger.error("llama.cpp executable not found")
             return None
         
-        # Run inference
+        # Run inference with configurable timeout
+        timeout = int(os.environ.get('CODEFIXER_LLM_TIMEOUT', '60'))
         result = subprocess.run([
             llama_executable,
             "-m", model,
@@ -118,7 +127,7 @@ def run_llama_cpp(prompt: str, model: str) -> Optional[str]:
             "--temp", "0.1",
             "--repeat_penalty", "1.1",
             "--ctx_size", "4096"
-        ], capture_output=True, text=True, timeout=60)
+        ], capture_output=True, text=True, timeout=timeout)
         
         if result.returncode != 0:
             logger.error(f"llama.cpp failed: {result.stderr}")
@@ -152,10 +161,11 @@ def run_ollama(prompt: str, model: str) -> Optional[str]:
             logger.error("Ollama not found")
             return None
         
-        # Run inference
+        # Run inference with configurable timeout
+        timeout = int(os.environ.get('CODEFIXER_LLM_TIMEOUT', '60'))
         result = subprocess.run([
             "ollama", "run", model, prompt
-        ], capture_output=True, text=True, timeout=60)
+        ], capture_output=True, text=True, timeout=timeout)
         
         if result.returncode != 0:
             logger.error(f"Ollama failed: {result.stderr}")
@@ -165,6 +175,18 @@ def run_ollama(prompt: str, model: str) -> Optional[str]:
         
     except subprocess.TimeoutExpired:
         logger.error("Ollama inference timed out")
+        # Retry once with a shorter timeout
+        try:
+            logger.info("Retrying with shorter timeout...")
+            timeout = int(os.environ.get('CODEFIXER_LLM_TIMEOUT', '60')) // 2
+            result = subprocess.run([
+                "ollama", "run", model, prompt
+            ], capture_output=True, text=True, timeout=timeout)
+            
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
         return None
     except Exception as e:
         logger.error(f"Ollama error: {e}")
@@ -172,7 +194,7 @@ def run_ollama(prompt: str, model: str) -> Optional[str]:
 
 def extract_code_from_response(response: str) -> str:
     """
-    Extract code from LLM response.
+    Extract code from LLM response (language-agnostic).
     
     Args:
         response: Raw LLM response
@@ -191,7 +213,7 @@ def extract_code_from_response(response: str) -> str:
         if line.strip().startswith('```'):
             start_idx = i + 1
             break
-        elif 'CORRECTED CODE:' in line or 'FIXED CODE:' in line:
+        elif any(prefix in line.upper() for prefix in ['CORRECTED CODE:', 'FIXED CODE:', 'HERE IS THE FIX:', 'SOLUTION:']):
             start_idx = i + 1
             break
     
@@ -211,19 +233,25 @@ def extract_code_from_response(response: str) -> str:
     
     # If no code blocks found, try to extract from the entire response
     if start_idx == 0 and end_idx == len(lines):
-        # Look for Python code patterns
+        # Look for common code patterns across languages
         code_lines = []
         in_code = False
         for line in lines:
-            if any(keyword in line for keyword in ['import ', 'def ', 'class ', 'if __name__']):
+            # Check for various language patterns
+            if any(pattern in line for pattern in [
+                'import ', 'def ', 'class ', 'if __name__',  # Python
+                'function ', 'const ', 'let ', 'var ', 'export ',  # JavaScript/TypeScript
+                '<!DOCTYPE', '<html', '<head', '<body',  # HTML
+                '{', '}', ';', '/*', '*/'  # General code patterns
+            ]):
                 in_code = True
             if in_code:
                 code_lines.append(line)
     
     result = '\n'.join(code_lines)
     
-    # Basic validation - ensure we have some Python code
-    if not any(keyword in result for keyword in ['import', 'def', 'class', 'if', 'pass']):
+    # Basic validation - ensure we have some code content
+    if not result.strip() or len(result.strip()) < 10:
         return ""
     
     return result
