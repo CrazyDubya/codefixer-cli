@@ -118,7 +118,7 @@ def run_llama_cpp(prompt: str, model: str) -> Optional[str]:
             "--temp", "0.1",
             "--repeat_penalty", "1.1",
             "--ctx_size", "4096"
-        ], capture_output=True, text=True, timeout=300)
+        ], capture_output=True, text=True, timeout=60)
         
         if result.returncode != 0:
             logger.error(f"llama.cpp failed: {result.stderr}")
@@ -155,7 +155,7 @@ def run_ollama(prompt: str, model: str) -> Optional[str]:
         # Run inference
         result = subprocess.run([
             "ollama", "run", model, prompt
-        ], capture_output=True, text=True, timeout=300)
+        ], capture_output=True, text=True, timeout=60)
         
         if result.returncode != 0:
             logger.error(f"Ollama failed: {result.stderr}")
@@ -209,7 +209,24 @@ def extract_code_from_response(response: str) -> str:
     while code_lines and not code_lines[-1].strip():
         code_lines.pop()
     
-    return '\n'.join(code_lines)
+    # If no code blocks found, try to extract from the entire response
+    if start_idx == 0 and end_idx == len(lines):
+        # Look for Python code patterns
+        code_lines = []
+        in_code = False
+        for line in lines:
+            if any(keyword in line for keyword in ['import ', 'def ', 'class ', 'if __name__']):
+                in_code = True
+            if in_code:
+                code_lines.append(line)
+    
+    result = '\n'.join(code_lines)
+    
+    # Basic validation - ensure we have some Python code
+    if not any(keyword in result for keyword in ['import', 'def', 'class', 'if', 'pass']):
+        return ""
+    
+    return result
 
 def generate_fix(file_path: Path, issues: List[Dict[str, Any]], model: str, runner: str = "llama.cpp") -> Optional[str]:
     """

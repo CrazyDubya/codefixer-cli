@@ -3,7 +3,6 @@ JavaScript/TypeScript linter module for CodeFixer.
 """
 
 import subprocess
-import tempfile
 import json
 import os
 from pathlib import Path
@@ -11,6 +10,12 @@ from typing import Dict, List, Any
 import logging
 
 logger = logging.getLogger(__name__)
+
+from .env_manager import env_manager
+
+def get_js_temp_dir(repo_path: Path) -> Path:
+    """Get temporary environment directory for JavaScript/TypeScript linters."""
+    return env_manager.get_language_env("js", repo_path)
 
 def setup_js_env(temp_dir: Path) -> bool:
     """
@@ -209,40 +214,27 @@ def run_prettier_check(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
         return []
 
 def run_js_linter(files: List[Path], repo_path: Path) -> Dict[str, List[Dict[str, Any]]]:
-    """
-    Run JavaScript/TypeScript linters on a list of files.
-    
-    Args:
-        files: List of JavaScript/TypeScript file paths
-        repo_path: Path to the repository root
-        
-    Returns:
-        Dictionary mapping file paths to lists of linting issues
-    """
     all_issues = {}
+    temp_path = get_js_temp_dir(repo_path)
     
-    # Create temporary environment
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        
-        # Setup JavaScript environment
-        if not setup_js_env(temp_path):
-            logger.error("Failed to setup JavaScript environment")
-            return all_issues
-        
-        # Lint each file
-        for file_path in files:
-            issues = []
-            
-            # Run ESLint
-            eslint_issues = run_eslint(file_path, temp_path)
-            issues.extend(eslint_issues)
-            
-            # Run Prettier check
-            prettier_issues = run_prettier_check(file_path, temp_path)
-            issues.extend(prettier_issues)
-            
-            if issues:
-                all_issues[str(file_path)] = issues
+    # Setup JavaScript environment
+    if not setup_js_env(temp_path):
+        logger.error("Failed to setup JavaScript environment")
+        return all_issues
     
+    # Lint each file
+    for file_path in files:
+        issues = []
+        
+        # Run ESLint
+        eslint_issues = run_eslint(file_path, temp_path)
+        issues.extend(eslint_issues)
+        
+        # Run Prettier check
+        prettier_issues = run_prettier_check(file_path, temp_path)
+        issues.extend(prettier_issues)
+        
+        if issues:
+            all_issues[str(file_path)] = issues
+
     return all_issues 

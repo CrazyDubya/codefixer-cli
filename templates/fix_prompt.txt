@@ -6,6 +6,6 @@ SOURCE CODE:
 LINT ISSUES:
 {issues}
 
-Please provide the corrected code with all lint issues fixed. Return only the corrected code without any explanations or markdown formatting.
+Please provide ONLY the corrected code with all lint issues fixed. Do not include any explanations, markdown formatting, or additional text. Return only the corrected source code exactly as it should be written to the file.
 
 CORRECTED CODE: 
