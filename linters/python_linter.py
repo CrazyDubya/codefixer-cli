@@ -35,7 +35,7 @@ def setup_python_env(temp_dir: Path) -> bool:
             pip_path = venv_path / "bin" / "pip"
         # Always try to install/upgrade linters (idempotent)
         subprocess.run([
-            str(pip_path), "install", "--upgrade", "flake8", "black", "pytest"
+            str(pip_path), "install", "--upgrade", "flake8", "black", "pytest", "mypy"
         ], check=True, capture_output=True)
         # Generate configs if missing
         from .configs import generate_python_configs
@@ -147,6 +147,60 @@ def run_black_check(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
         logger.error(f"Black check failed for {file_path}: {e}")
         return []
 
+def run_mypy(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
+    """Run mypy type checker on a Python file."""
+    try:
+        if os.name == 'nt':
+            mypy_path = temp_dir / "venv" / "Scripts" / "mypy"
+        else:
+            mypy_path = temp_dir / "venv" / "bin" / "mypy"
+        
+        result = subprocess.run([
+            str(mypy_path),
+            "--no-error-summary",
+            "--no-pretty",
+            str(file_path)
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return []
+        
+        return parse_mypy_output(result.stdout, file_path)
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"mypy failed for {file_path}: {e}")
+        return []
+
+def parse_mypy_output(output: str, file_path: Path) -> List[Dict[str, Any]]:
+    """Parse mypy output."""
+    import re
+    issues = []
+    
+    # Pattern: file:line: error: message
+    pattern = r'^(.+):(\d+):\s*error:\s*(.+)$'
+    
+    for line in output.strip().split('\n'):
+        if not line or line.startswith('Found'):
+            continue
+            
+        match = re.match(pattern, line)
+        if match:
+            try:
+                line_num = int(match.group(2))
+                message = match.group(3).strip()
+                
+                issues.append({
+                    "path": str(file_path),
+                    "row": line_num,
+                    "col": 1,
+                    "code": "mypy",
+                    "text": message
+                })
+            except (ValueError, IndexError):
+                continue
+    
+    return issues
+
 def run_python_linter(files: List[Path], repo_path: Path) -> Dict[str, List[Dict[str, Any]]]:
     all_issues = {}
     temp_path = get_python_temp_dir(repo_path)
@@ -159,6 +213,8 @@ def run_python_linter(files: List[Path], repo_path: Path) -> Dict[str, List[Dict
         issues.extend(flake8_issues)
         black_issues = run_black_check(file_path, temp_path)
         issues.extend(black_issues)
+        mypy_issues = run_mypy(file_path, temp_path)
+        issues.extend(mypy_issues)
         if issues:
             all_issues[str(file_path)] = issues
     return all_issues 

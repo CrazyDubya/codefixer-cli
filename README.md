@@ -112,11 +112,12 @@ codefixer --cleanup
 
 | Language | Linter(s) | Config File |
 |----------|-----------|-------------|
-| Python | flake8, black | .flake8, pyproject.toml |
+| Python | flake8, black, mypy | .flake8, pyproject.toml, mypy.ini |
 | JavaScript | ESLint, Prettier | .eslintrc.json, .prettierrc |
 | TypeScript | ESLint, Prettier | .eslintrc.json, .prettierrc |
 | HTML | htmlhint | .htmlhintrc |
 | CSS | stylelint | .stylelintrc.json |
+| YAML | yamllint | .yamllint |
 
 ## 🏗️ How It Works
 

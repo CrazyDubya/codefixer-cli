@@ -33,7 +33,10 @@ logger = setup_logger()
 @click.option('--cleanup', is_flag=True, help='Clean up all temporary environments')
 @click.option('--show-issues', is_flag=True, help='Show all lint issues per file in dry-run mode')
 @click.option('--show-diff', is_flag=True, help='Show unified diff of proposed fixes in dry-run mode')
-def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup, show_issues, show_diff):
+@click.option('--config', is_flag=True, help='Show current configuration')
+@click.option('--config-reset', is_flag=True, help='Reset configuration to defaults')
+@click.option('--list-models', is_flag=True, help='List available LLM models')
+def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup, show_issues, show_diff, config, config_reset, list_models):
     """CodeFixer - Automated code fixing with local LLM and best-practice linters.
     
     CodeFixer is a privacy-first, local-only CLI tool that automatically analyzes your git repositories,
@@ -71,6 +74,10 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
     # Clean up temporary environments
     codefixer --cleanup
     
+    # Show configuration and available models
+    codefixer --config
+    codefixer --list-models
+    
     ENVIRONMENT MANAGEMENT:
     - Temporary linter environments are stored in your system temp directory
     - Environments older than 24 hours are automatically cleaned up
@@ -84,16 +91,35 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
     - Temporary environments are isolated and automatically cleaned up
     
     SUPPORTED LANGUAGES & LINTERS:
-    - Python: flake8, black, pytest
+    - Python: flake8, black, mypy, pytest
     - JavaScript/TypeScript: ESLint, Prettier
     - HTML: htmlhint
     - CSS: stylelint
+    - YAML: yamllint
     
     For more information, visit: https://github.com/CrazyDubya/codefixer-cli
     """
     
     if verbose:
         logger.setLevel('DEBUG')
+    
+    # Handle configuration commands
+    if config:
+        from config_manager import show_config
+        show_config()
+        return
+    
+    if config_reset:
+        from config_manager import reset_config
+        if reset_config():
+            logger.info("Configuration reset to defaults")
+        else:
+            logger.error("Failed to reset configuration")
+        return
+    
+    if list_models:
+        list_available_models()
+        return
     
     # Handle cleanup command
     if cleanup:
@@ -166,6 +192,9 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
                 issues = run_html_linter(files, repo_path)
             elif lang == 'css':
                 issues = run_css_linter(files, repo_path)
+            elif lang == 'yaml':
+                from linters.yaml_linter import run_yaml_linter
+                issues = run_yaml_linter(files, repo_path)
             else:
                 logger.warning(f"No linter configured for {lang}")
                 continue
@@ -177,12 +206,26 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
             logger.info("No linting issues found")
             return
         
-        logger.info(f"Found {sum(len(issues) for issues in all_issues.values())} issues across {len(all_issues)} files")
+        # Deduplicate and prioritize issues
+        from issue_deduplicator import deduplicate_issues, prioritize_issues
+        all_issues = deduplicate_issues(all_issues)
+        all_issues = prioritize_issues(all_issues)
+        
+        total_issues = sum(len(issues) for issues in all_issues.values())
+        logger.info(f"Found {total_issues} issues across {len(all_issues)} files (after deduplication)")
         
         # Phase 3: Generate fixes with LLM
         logger.info("Generating fixes with LLM...")
         fixes = {}
-        for file_path, issues in all_issues.items():
+        
+        # Try to use tqdm for progress bar
+        try:
+            from tqdm import tqdm
+            progress_bar = tqdm(all_issues.items(), desc="Generating fixes", unit="file")
+        except ImportError:
+            progress_bar = all_issues.items()
+        
+        for file_path, issues in progress_bar:
             logger.debug(f"Fixing {file_path}...")
             try:
                 fix = generate_fix(file_path, issues, model, runner)
@@ -270,6 +313,27 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
     except Exception as e:
         logger.error(f"CodeFixer failed: {e}")
         sys.exit(1)
+
+def list_available_models():
+    """List available LLM models."""
+    print("Available LLM Models:")
+    print("\nOllama Models (recommended):")
+    print("  smollm2:135m     - Very fast, good for simple fixes")
+    print("  phi3:3b          - Good balance of speed and quality")
+    print("  gemma:2b         - Reliable, good code understanding")
+    print("  llama3.2:3b      - Excellent code generation")
+    print("  codellama:7b     - Specialized for code (larger)")
+    print("  deepseek-coder:6.7b - Code-focused model")
+    
+    print("\nTo install a model with Ollama:")
+    print("  ollama pull <model-name>")
+    print("\nTo see all available models:")
+    print("  ollama list")
+    
+    print("\nllama.cpp Models:")
+    print("  Use any GGUF model file")
+    print("  Download from: https://huggingface.co/models?search=gguf")
+    print("  Example: llama-3.2-3b.Q4_K_M.gguf")
 
 if __name__ == '__main__':
     main() 

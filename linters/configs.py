@@ -46,6 +46,28 @@ markers =
     integration: marks tests as integration tests
 """
 
+PYTHON_MYPY_CONFIG = """[mypy]
+python_version = 3.8
+warn_return_any = True
+warn_unused_configs = True
+disallow_untyped_defs = True
+disallow_incomplete_defs = True
+check_untyped_defs = True
+disallow_untyped_decorators = True
+no_implicit_optional = True
+warn_redundant_casts = True
+warn_unused_ignores = True
+warn_no_return = True
+warn_unreachable = True
+strict_equality = True
+
+[mypy.plugins.numpy.*]
+ignore_missing_imports = True
+
+[mypy-pandas.*]
+ignore_missing_imports = True
+"""
+
 # JavaScript/TypeScript linter configs
 JS_ESLINT_CONFIG = {
     "env": {
@@ -106,6 +128,26 @@ CSS_STYLELINT_CONFIG = {
     }
 }
 
+# YAML linter config
+YAML_YAMLLINT_CONFIG = """extends: default
+
+rules:
+  line-length:
+    max: 88
+    level: warning
+  indentation:
+    spaces: 2
+    indent-sequences: true
+  trailing-spaces: enable
+  truthy:
+    check-keys: false
+  comments-indentation: enable
+  document-start: disable
+  empty-lines:
+    max: 1
+    max-end: 1
+"""
+
 def generate_python_configs(temp_dir: Path) -> Dict[str, Path]:
     """Generate Python linter configuration files."""
     configs = {}
@@ -127,6 +169,12 @@ def generate_python_configs(temp_dir: Path) -> Dict[str, Path]:
     with open(pytest_path, "w") as f:
         f.write(PYTHON_PYTEST_CONFIG)
     configs["pytest"] = pytest_path
+    
+    # Generate mypy.ini
+    mypy_path = temp_dir / "mypy.ini"
+    with open(mypy_path, "w") as f:
+        f.write(PYTHON_MYPY_CONFIG)
+    configs["mypy"] = mypy_path
     
     return configs
 
@@ -172,6 +220,18 @@ def generate_css_configs(temp_dir: Path) -> Dict[str, Path]:
     
     return configs
 
+def generate_yaml_configs(temp_dir: Path) -> Dict[str, Path]:
+    """Generate YAML linter configuration files."""
+    configs = {}
+    
+    # Generate .yamllint
+    yamllint_path = temp_dir / ".yamllint"
+    with open(yamllint_path, "w") as f:
+        f.write(YAML_YAMLLINT_CONFIG)
+    configs["yamllint"] = yamllint_path
+    
+    return configs
+
 def generate_all_configs(temp_dir: Path, languages: list) -> Dict[str, Dict[str, Path]]:
     """Generate all linter configuration files for detected languages."""
     all_configs = {}
@@ -187,5 +247,8 @@ def generate_all_configs(temp_dir: Path, languages: list) -> Dict[str, Dict[str,
     
     if "css" in languages:
         all_configs["css"] = generate_css_configs(temp_dir)
+    
+    if "yaml" in languages:
+        all_configs["yaml"] = generate_yaml_configs(temp_dir)
     
     return all_configs 
