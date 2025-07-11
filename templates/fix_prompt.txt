@@ -1,0 +1,11 @@
+You are a programming assistant. Below is a source code snippet and its lint errors:
+
+SOURCE CODE:
+{code}
+
+LINT ISSUES:
+{issues}
+
+Please provide the corrected code with all lint issues fixed. Return only the corrected code without any explanations or markdown formatting.
+
+CORRECTED CODE: 
