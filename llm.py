@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -256,15 +257,17 @@ def extract_code_from_response(response: str) -> str:
     
     return result
 
-def generate_fix(file_path: Path, issues: List[Dict[str, Any]], model: str, runner: str = "llama.cpp") -> Optional[str]:
+def generate_fix(file_path: Path, issues: List[Dict[str, Any]], model: str = 'gemma3:1b', runner: str = 'ollama', timeout: int = 30, max_retries: int = 3) -> Optional[str]:
     """
     Generate a fix for lint issues using local LLM.
     
     Args:
         file_path: Path to the file with issues
         issues: List of linting issues
-        model: Model name/path
-        runner: LLM runner to use (llama.cpp, ollama)
+        model: LLM model to use
+        runner: LLM runner ('ollama' or 'llama.cpp')
+        timeout: Request timeout in seconds
+        max_retries: Maximum number of retries
         
     Returns:
         Fixed code or None if failed
@@ -276,29 +279,45 @@ def generate_fix(file_path: Path, issues: List[Dict[str, Any]], model: str, runn
     if not prompt:
         return None
     
-    # Run LLM inference
-    response = None
-    if runner.lower() == "llama.cpp":
-        response = run_llama_cpp(prompt, model)
-    elif runner.lower() == "ollama":
-        response = run_ollama(prompt, model)
-    else:
-        logger.error(f"Unknown LLM runner: {runner}")
-        return None
+    for attempt in range(max_retries):
+        try:
+            logger.debug(f"LLM request attempt {attempt + 1}/{max_retries}")
+            
+            # Run LLM inference
+            response = None
+            if runner.lower() == "llama.cpp":
+                response = run_llama_cpp(prompt, model)
+            elif runner.lower() == "ollama":
+                response = run_ollama(prompt, model)
+            else:
+                logger.error(f"Unknown LLM runner: {runner}")
+                return None
+            
+            if response:
+                # Extract code from response
+                fixed_code = extract_code_from_response(response)
+                
+                if fixed_code and fixed_code != "":
+                    logger.debug(f"Generated fix successfully on attempt {attempt + 1}")
+                    return fixed_code
+                else:
+                    logger.warning(f"LLM returned empty or unchanged code on attempt {attempt + 1}")
+            else:
+                logger.warning(f"LLM request failed on attempt {attempt + 1}")
+                
+        except subprocess.TimeoutExpired:
+            logger.warning(f"LLM request timed out on attempt {attempt + 1} (timeout: {timeout}s)")
+        except Exception as e:
+            logger.warning(f"LLM request error on attempt {attempt + 1}: {e}")
+        
+        # Wait before retry (exponential backoff)
+        if attempt < max_retries - 1:
+            wait_time = 2 ** attempt
+            logger.debug(f"Waiting {wait_time}s before retry...")
+            time.sleep(wait_time)
     
-    if not response:
-        logger.error(f"Failed to generate response for {file_path}")
-        return None
-    
-    # Extract code from response
-    fixed_code = extract_code_from_response(response)
-    
-    if not fixed_code:
-        logger.error(f"Failed to extract code from response for {file_path}")
-        return None
-    
-    logger.debug(f"Generated fix for {file_path}")
-    return fixed_code
+    logger.error(f"Failed to generate fix after {max_retries} attempts")
+    return None
 
 def validate_fix(original_code: str, fixed_code: str) -> bool:
     """
@@ -325,3 +344,69 @@ def validate_fix(original_code: str, fixed_code: str) -> bool:
         return False
     
     return True 
+
+def list_available_models(runner: str = 'ollama') -> List[str]:
+    """
+    List available models for the specified runner.
+    
+    Args:
+        runner: LLM runner ('ollama' or 'llama.cpp')
+        
+    Returns:
+        List of available model names
+    """
+    try:
+        if runner == 'ollama':
+            return list_ollama_models()
+        elif runner == 'llama.cpp':
+            return list_llamacpp_models()
+        else:
+            logger.warning(f"Unknown runner: {runner}")
+            return []
+    except Exception as e:
+        logger.error(f"Error listing models: {e}")
+        return []
+
+def list_ollama_models() -> List[str]:
+    """List available Ollama models."""
+    try:
+        result = subprocess.run(['ollama', 'list'], capture_output=True, text=True)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            models = []
+            for line in lines:
+                if line.strip():
+                    # Parse "model_name:tag" format
+                    parts = line.split()
+                    if parts:
+                        model_name = parts[0]
+                        models.append(model_name)
+            return models
+        else:
+            logger.error(f"Failed to list Ollama models: {result.stderr}")
+            return []
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running ollama list: {e}")
+        return []
+
+def list_llamacpp_models() -> List[str]:
+    """List available llama.cpp models (from common model directories)."""
+    try:
+        # Common model directories
+        model_dirs = [
+            Path.home() / ".local" / "share" / "llama.cpp" / "models",
+            Path.home() / "llama.cpp" / "models",
+            Path("/usr/local/share/llama.cpp/models"),
+            Path("/opt/llama.cpp/models")
+        ]
+        
+        models = []
+        for model_dir in model_dirs:
+            if model_dir.exists():
+                for model_file in model_dir.glob("*.gguf"):
+                    models.append(model_file.stem)
+        
+        return models
+    except Exception as e:
+        logger.error(f"Error listing llama.cpp models: {e}")
+        return [] 

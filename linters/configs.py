@@ -17,6 +17,16 @@ per-file-ignores =
     tests/*:S101,S105,S106,S107
 """
 
+PYTHON_FLAKE8_TEST_CONFIG = """[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, E501, S101,S105,S106,S107
+exclude = .git,__pycache__,build,dist,.venv,venv,node_modules
+per-file-ignores =
+    __init__.py:F401
+    test_*.py:S101,S105,S106,S107
+    *_test.py:S101,S105,S106,S107
+"""
+
 PYTHON_BLACK_CONFIG = """[tool.black]
 line-length = 88
 target-version = ['py38']
@@ -102,6 +112,31 @@ JS_PRETTIER_CONFIG = {
     "useTabs": False
 }
 
+# TypeScript linter config
+TS_TSLINT_CONFIG = {
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended"
+    ],
+    "rules": {
+        "indent": [true, "spaces", 2],
+        "quotemark": [true, "single"],
+        "semicolon": [true, "always"],
+        "no-unused-variable": true,
+        "no-console": [true, "log", "warn", "error"],
+        "prefer-const": true,
+        "no-var-keyword": true,
+        "arrow-parens": [true, "always"],
+        "trailing-comma": [true, {"multiline": "always", "singleline": "never"}],
+        "object-literal-sort-keys": false,
+        "interface-name": [true, "never-prefix"],
+        "member-access": [true, "no-public"],
+        "no-empty": [true, "allow-empty-catch"],
+        "no-consecutive-blank-lines": [true, 1],
+        "max-line-length": [true, 88]
+    }
+}
+
 # HTML linter config
 HTML_HTMLHINT_CONFIG = {
     "tagname-lowercase": True,
@@ -148,35 +183,27 @@ rules:
     max-end: 1
 """
 
-def generate_python_configs(temp_dir: Path) -> Dict[str, Path]:
+def generate_python_configs(temp_dir: Path) -> None:
     """Generate Python linter configuration files."""
-    configs = {}
-    
-    # Generate .flake8
-    flake8_path = temp_dir / ".flake8"
-    with open(flake8_path, "w") as f:
+    # Flake8 config
+    with open(temp_dir / "flake8.ini", "w") as f:
         f.write(PYTHON_FLAKE8_CONFIG)
-    configs["flake8"] = flake8_path
     
-    # Generate pyproject.toml for black
-    pyproject_path = temp_dir / "pyproject.toml"
-    with open(pyproject_path, "w") as f:
+    # Flake8 test config
+    with open(temp_dir / "flake8_test.ini", "w") as f:
+        f.write(PYTHON_FLAKE8_TEST_CONFIG)
+    
+    # Black config
+    with open(temp_dir / "pyproject.toml", "w") as f:
         f.write(PYTHON_BLACK_CONFIG)
-    configs["black"] = pyproject_path
     
-    # Generate pytest.ini
-    pytest_path = temp_dir / "pytest.ini"
-    with open(pytest_path, "w") as f:
+    # pytest config
+    with open(temp_dir / "pytest.ini", "w") as f:
         f.write(PYTHON_PYTEST_CONFIG)
-    configs["pytest"] = pytest_path
     
-    # Generate mypy.ini
-    mypy_path = temp_dir / "mypy.ini"
-    with open(mypy_path, "w") as f:
+    # mypy config
+    with open(temp_dir / "mypy.ini", "w") as f:
         f.write(PYTHON_MYPY_CONFIG)
-    configs["mypy"] = mypy_path
-    
-    return configs
 
 def generate_js_configs(temp_dir: Path) -> Dict[str, Path]:
     """Generate JavaScript/TypeScript linter configuration files."""
@@ -193,6 +220,12 @@ def generate_js_configs(temp_dir: Path) -> Dict[str, Path]:
     with open(prettier_path, "w") as f:
         json.dump(JS_PRETTIER_CONFIG, f, indent=2)
     configs["prettier"] = prettier_path
+    
+    # Generate tslint.json for TypeScript
+    tslint_path = temp_dir / "tslint.json"
+    with open(tslint_path, "w") as f:
+        json.dump(TS_TSLINT_CONFIG, f, indent=2)
+    configs["tslint"] = tslint_path
     
     return configs
 

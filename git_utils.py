@@ -8,25 +8,86 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 import logging
 from git import Repo, GitCommandError
+import difflib
 
 logger = logging.getLogger(__name__)
 
 def check_repo_clean(repo_path: Path) -> bool:
     """
-    Check if the repository is clean (no uncommitted changes).
+    Check if the git repository is clean (no uncommitted changes).
     
     Args:
-        repo_path: Path to the git repository
+        repo_path: Path to the repository
         
     Returns:
-        True if clean, False otherwise
+        True if repository is clean, False otherwise
     """
     try:
         repo = Repo(repo_path)
-        return not repo.is_dirty()
+        
+        # Check for uncommitted changes
+        if repo.is_dirty():
+            logger.error("Repository has uncommitted changes:")
+            
+            # Show modified files
+            for item in repo.index.diff(None):
+                logger.error(f"  Modified: {item.a_path}")
+            
+            # Show untracked files
+            for untracked in repo.untracked_files:
+                logger.error(f"  Untracked: {untracked}")
+            
+            # Show staged changes
+            for item in repo.index.diff('HEAD'):
+                logger.error(f"  Staged: {item.a_path}")
+            
+            logger.info("Please commit or stash your changes before running CodeFixer")
+            return False
+        
+        return True
+        
     except Exception as e:
-        logger.error(f"Failed to check repository status: {e}")
+        logger.error(f"Error checking repository status: {e}")
         return False
+
+def get_repo_status_summary(repo_path: Path) -> Dict[str, Any]:
+    """
+    Get a summary of the repository status.
+    
+    Args:
+        repo_path: Path to the repository
+        
+    Returns:
+        Dictionary with status information
+    """
+    try:
+        repo = Repo(repo_path)
+        
+        status = {
+            "is_dirty": repo.is_dirty(),
+            "modified_files": [],
+            "untracked_files": [],
+            "staged_files": [],
+            "current_branch": repo.active_branch.name if repo.head.is_valid() else None
+        }
+        
+        if repo.is_dirty():
+            # Get modified files
+            for item in repo.index.diff(None):
+                status["modified_files"].append(item.a_path)
+            
+            # Get untracked files
+            status["untracked_files"] = repo.untracked_files
+            
+            # Get staged files
+            for item in repo.index.diff('HEAD'):
+                status["staged_files"].append(item.a_path)
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error getting repository status: {e}")
+        return {"error": str(e)}
 
 def create_branch(repo_path: Path, branch_name: str) -> bool:
     """
@@ -346,31 +407,172 @@ This MR contains automated fixes for linting issues detected by CodeFixer.
         logger.error(f"Failed to create GitLab MR: {e}")
         return None
 
-def push_and_pr(repo_path: Path, branch_name: str, issues: Dict[str, List[Dict[str, Any]]], fixes: Dict[str, str]) -> Optional[str]:
+def push_and_pr(repo_path: Path, branch_name: str, commit_message: str, fixes: Dict[str, str], issues: Dict[str, List[Dict[str, Any]]], show_diff_in_pr: bool = False) -> bool:
     """
-    Push branch and create pull/merge request.
+    Push branch and create pull request.
     
     Args:
-        repo_path: Path to the git repository
-        branch_name: Name of the branch
-        issues: Dictionary of linting issues
-        fixes: Dictionary of applied fixes
+        repo_path: Path to the repository
+        branch_name: Name of the branch to push
+        commit_message: Commit message
+        fixes: Dictionary mapping file paths to fixed content
+        issues: Dictionary mapping file paths to lists of issues
+        show_diff_in_pr: Whether to include diffs in PR body
         
     Returns:
-        PR/MR URL or None if failed
+        True if successful, False otherwise
     """
-    # Push branch
-    if not push_branch(repo_path, branch_name):
-        return None
+    try:
+        # Push the branch
+        if not push_branch(repo_path, branch_name):
+            logger.error("Failed to push branch")
+            return False
+        
+        # Generate PR body
+        pr_body = generate_pr_body(fixes, issues, show_diff_in_pr)
+        
+        # Create pull request
+        pr_title = f"CodeFixer: {commit_message}"
+        if not create_pull_request(repo_path, branch_name, pr_title, pr_body):
+            logger.error("Failed to create pull request")
+            return False
+        
+        logger.info("Branch pushed and pull request created successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in push_and_pr: {e}")
+        return False
+
+def create_pull_request(repo_path: Path, branch_name: str, title: str, body: str = "") -> bool:
+    """
+    Create a pull request using GitHub CLI.
     
-    # Detect remote host
-    host = detect_remote_host(repo_path)
+    Args:
+        repo_path: Path to the repository
+        branch_name: Name of the branch to create PR for
+        title: PR title
+        body: PR body (can include diffs)
+        
+    Returns:
+        True if PR created successfully, False otherwise
+    """
+    try:
+        # Get the current branch (target for PR)
+        current_branch = get_current_branch(repo_path)
+        if not current_branch:
+            logger.error("Could not determine current branch")
+            return False
+        
+        # Create PR using GitHub CLI
+        cmd = [
+            "gh", "pr", "create",
+            "--title", title,
+            "--body", body,
+            "--head", branch_name,
+            "--base", current_branch
+        ]
+        
+        result = subprocess.run(cmd, cwd=repo_path, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            logger.info(f"Pull request created successfully: {result.stdout.strip()}")
+            return True
+        else:
+            logger.error(f"Failed to create pull request: {result.stderr}")
+            return False
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error creating pull request: {e}")
+        return False
+
+def generate_pr_body(fixes: Dict[str, str], issues: Dict[str, List[Dict[str, Any]]], show_diff: bool = False) -> str:
+    """
+    Generate a comprehensive PR body with issue summary and optional diffs.
     
-    if host == 'github':
-        return create_github_pr(repo_path, branch_name, issues, fixes)
-    elif host == 'gitlab':
-        return create_gitlab_mr(repo_path, branch_name, issues, fixes)
-    else:
-        logger.warning(f"Unknown remote host: {host}. Please create PR/MR manually.")
-        logger.info(f"Branch {branch_name} has been pushed to remote.")
-        return None 
+    Args:
+        fixes: Dictionary mapping file paths to fixed content
+        issues: Dictionary mapping file paths to lists of issues
+        show_diff: Whether to include diffs in the PR body
+        
+    Returns:
+        Formatted PR body string
+    """
+    body_parts = []
+    
+    # Summary
+    total_files = len(fixes)
+    total_issues = sum(len(issues.get(file_path, [])) for file_path in fixes.keys())
+    
+    body_parts.append(f"## CodeFixer Automated Fixes")
+    body_parts.append("")
+    body_parts.append(f"This PR contains automated fixes for **{total_issues} issues** across **{total_files} files**.")
+    body_parts.append("")
+    
+    # Files summary
+    body_parts.append("### Files Modified")
+    for file_path in sorted(fixes.keys()):
+        file_issues = issues.get(file_path, [])
+        issue_count = len(file_issues)
+        body_parts.append(f"- `{file_path}` ({issue_count} issues)")
+    body_parts.append("")
+    
+    # Issue breakdown
+    body_parts.append("### Issue Breakdown")
+    issue_types = {}
+    for file_path, file_issues in issues.items():
+        for issue in file_issues:
+            issue_type = issue.get("code", "unknown")
+            issue_types[issue_type] = issue_types.get(issue_type, 0) + 1
+    
+    for issue_type, count in sorted(issue_types.items()):
+        body_parts.append(f"- **{issue_type}**: {count} issues")
+    body_parts.append("")
+    
+    # Include diffs if requested
+    if show_diff:
+        body_parts.append("### Detailed Changes")
+        body_parts.append("")
+        
+        for file_path in sorted(fixes.keys()):
+            original_content = read_file_content(Path(file_path))
+            fixed_content = fixes[file_path]
+            
+            if original_content != fixed_content:
+                diff = generate_unified_diff(file_path, original_content, fixed_content)
+                if diff:
+                    body_parts.append(f"#### {file_path}")
+                    body_parts.append("```diff")
+                    body_parts.append(diff)
+                    body_parts.append("```")
+                    body_parts.append("")
+    
+    # Footer
+    body_parts.append("---")
+    body_parts.append("*This PR was automatically generated by CodeFixer CLI*")
+    body_parts.append("*Please review all changes before merging*")
+    
+    return "\n".join(body_parts)
+
+def read_file_content(file_path: Path) -> str:
+    """Read file content safely."""
+    try:
+        return file_path.read_text(encoding='utf-8')
+    except Exception as e:
+        logger.warning(f"Could not read {file_path}: {e}")
+        return ""
+
+def generate_unified_diff(file_path: str, original: str, fixed: str) -> str:
+    """Generate unified diff for a file."""
+    try:
+        diff_lines = difflib.unified_diff(
+            original.splitlines(keepends=True),
+            fixed.splitlines(keepends=True),
+            fromfile=f"a/{file_path}",
+            tofile=f"b/{file_path}",
+            lineterm=""
+        )
+        return "".join(diff_lines)
+    except Exception as e:
+        logger.warning(f"Could not generate diff for {file_path}: {e}")
+        return "" 

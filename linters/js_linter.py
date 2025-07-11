@@ -35,7 +35,10 @@ def setup_js_env(temp_dir: Path) -> bool:
         
         # Install linters
         subprocess.run([
-            "npm", "install", "--save-dev", "eslint", "prettier", "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin"
+            "npm", "install", "--save-dev", 
+            "eslint", "prettier", 
+            "@typescript-eslint/parser", "@typescript-eslint/eslint-plugin",
+            "tslint", "typescript"
         ], cwd=temp_dir, check=True, capture_output=True)
         
         # Generate configs using the centralized config generator
@@ -201,6 +204,101 @@ def run_prettier_check(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
         logger.error(f"Prettier check failed for {file_path}: {e}")
         return []
 
+def run_tslint(file_path: Path, temp_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Run TSLint on a TypeScript file.
+    
+    Args:
+        file_path: Path to the TypeScript file
+        temp_dir: Temporary directory with npm environment
+        
+    Returns:
+        List of linting issues
+    """
+    try:
+        # Run TSLint
+        result = subprocess.run([
+            "npx", "tslint",
+            "--format", "json",
+            str(file_path)
+        ], cwd=temp_dir, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return []
+        
+        # Parse JSON output
+        try:
+            issues_data = json.loads(result.stdout)
+            issues = []
+            
+            for issue in issues_data:
+                issues.append({
+                    "path": str(file_path),
+                    "row": issue.get("startPosition", {}).get("line", 1),
+                    "col": issue.get("startPosition", {}).get("character", 1),
+                    "code": issue.get("ruleName", "unknown"),
+                    "text": issue.get("failure", "")
+                })
+            
+            return issues
+            
+        except json.JSONDecodeError:
+            # Fallback to parsing text output
+            return parse_tslint_text_output(result.stdout, file_path)
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"TSLint failed for {file_path}: {e}")
+        return []
+
+def parse_tslint_text_output(output: str, file_path: Path) -> List[Dict[str, Any]]:
+    """Parse TSLint text output when JSON format fails."""
+    issues = []
+    lines = output.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line or str(file_path) not in line:
+            continue
+            
+        # Parse TSLint output format: file.ts[line, col]: error: message
+        try:
+            # Extract line and column numbers
+            if '[' in line and ']' in line:
+                pos_start = line.find('[') + 1
+                pos_end = line.find(']')
+                pos_str = line[pos_start:pos_end]
+                line_col = pos_str.split(', ')
+                if len(line_col) >= 2:
+                    row = int(line_col[0])
+                    col = int(line_col[1])
+                    
+                    # Extract error message
+                    if 'error:' in line:
+                        message = line.split('error: ', 1)[1]
+                    elif 'warning:' in line:
+                        message = line.split('warning: ', 1)[1]
+                    else:
+                        message = line
+                    
+                    issues.append({
+                        "path": str(file_path),
+                        "row": row,
+                        "col": col,
+                        "code": "TSLINT",
+                        "text": message.strip()
+                    })
+        except (ValueError, IndexError):
+            # If parsing fails, add as generic issue
+            issues.append({
+                "path": str(file_path),
+                "row": 1,
+                "col": 1,
+                "code": "TSLINT",
+                "text": line
+            })
+    
+    return issues
+
 def run_js_linter(files: List[Path], repo_path: Path) -> Dict[str, List[Dict[str, Any]]]:
     all_issues = {}
     temp_path = get_js_temp_dir(repo_path)
@@ -210,15 +308,27 @@ def run_js_linter(files: List[Path], repo_path: Path) -> Dict[str, List[Dict[str
         logger.error("Failed to setup JavaScript environment")
         return all_issues
     
+    # Separate TypeScript and JavaScript files
+    ts_files = [f for f in files if f.suffix.lower() == '.ts' or f.suffix.lower() == '.tsx']
+    js_files = [f for f in files if f.suffix.lower() in ['.js', '.jsx']]
+    
+    logger.info(f"Found {len(ts_files)} TypeScript files and {len(js_files)} JavaScript files")
+    
     # Lint each file
     for file_path in files:
         issues = []
         
-        # Run ESLint
-        eslint_issues = run_eslint(file_path, temp_path)
-        issues.extend(eslint_issues)
+        # Use appropriate linter based on file type
+        if file_path.suffix.lower() in ['.ts', '.tsx']:
+            # Run TSLint for TypeScript files
+            tslint_issues = run_tslint(file_path, temp_path)
+            issues.extend(tslint_issues)
+        else:
+            # Run ESLint for JavaScript files
+            eslint_issues = run_eslint(file_path, temp_path)
+            issues.extend(eslint_issues)
         
-        # Run Prettier check
+        # Run Prettier check for all files
         prettier_issues = run_prettier_check(file_path, temp_path)
         issues.extend(prettier_issues)
         

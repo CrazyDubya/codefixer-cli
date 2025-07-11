@@ -145,57 +145,149 @@ def hash_issue(issue: Dict[str, Any]) -> str:
     
     return '|'.join(parts)
 
-def prioritize_issues(issues: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+def prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Prioritize issues by severity and importance.
+    Prioritize issues based on severity and type.
     
     Args:
-        issues: Dictionary mapping file paths to lists of linting issues
+        issues: List of linting issues
         
     Returns:
-        Dictionary with prioritized issues
+        Prioritized list of issues
     """
-    prioritized = {}
-    
-    for file_path, file_issues in issues.items():
-        if not file_issues:
-            continue
+    # Define priority weights for different issue types
+    priority_weights = {
+        # High priority - security and critical issues
+        'security': 100,
+        'S101': 100,  # Use of assert detected
+        'S105': 100,  # Possible hardcoded password
+        'S106': 100,  # Possible hardcoded password
+        'S107': 100,  # Possible hardcoded password
+        'no-eval': 100,  # eval() usage
+        'no-implied-eval': 100,  # implied eval
         
-        # Sort issues by priority
-        sorted_issues = sorted(file_issues, key=lambda x: get_issue_priority(x), reverse=True)
-        prioritized[file_path] = sorted_issues
+        # Medium priority - code quality issues
+        'unused-variable': 50,
+        'no-unused-vars': 50,
+        'unused-import': 50,
+        'F401': 50,  # Unused import
+        'no-console': 40,  # console.log usage
+        'prefer-const': 45,  # Use const instead of let
+        
+        # Low priority - style issues
+        'indent': 10,
+        'E111': 10,  # Indentation
+        'E112': 10,  # Expected indentation
+        'quotes': 5,
+        'semi': 5,
+        'comma-dangle': 5,
+        'trailing-comma': 5,
+        
+        # Very low priority - formatting
+        'E501': 1,  # Line too long
+        'max-len': 1,
+        'printWidth': 1,
+    }
+    
+    def get_priority(issue: Dict[str, Any]) -> int:
+        """Get priority weight for an issue."""
+        code = issue.get('code', '').lower()
+        
+        # Check for security-related keywords
+        if any(keyword in issue.get('text', '').lower() for keyword in ['security', 'vulnerability', 'unsafe', 'dangerous']):
+            return priority_weights.get('security', 50)
+        
+        # Check for specific codes
+        for pattern, weight in priority_weights.items():
+            if pattern in code:
+                return weight
+        
+        # Default priority
+        return 25
+    
+    # Sort issues by priority (highest first)
+    prioritized = sorted(issues, key=get_priority, reverse=True)
     
     return prioritized
 
-def get_issue_priority(issue: Dict[str, Any]) -> int:
+def filter_issues_by_severity(issues: List[Dict[str, Any]], min_severity: str = 'low') -> List[Dict[str, Any]]:
     """
-    Get priority score for an issue.
+    Filter issues by minimum severity level.
     
     Args:
-        issue: Issue dictionary
+        issues: List of linting issues
+        min_severity: Minimum severity level ('low', 'medium', 'high', 'critical')
         
     Returns:
-        Priority score (higher = more important)
+        Filtered list of issues
     """
-    priority = 0
-    code = issue.get('code', '').lower()
-    text = issue.get('text', '').lower()
+    severity_levels = {
+        'low': 1,
+        'medium': 2,
+        'high': 3,
+        'critical': 4
+    }
     
-    # High priority issues
-    if any(keyword in code or keyword in text for keyword in ['error', 'security', 'critical']):
-        priority += 100
+    min_level = severity_levels.get(min_severity.lower(), 1)
     
-    # Medium priority issues
-    if any(keyword in code or keyword in text for keyword in ['warning', 'style', 'format']):
-        priority += 50
+    def get_severity_level(issue: Dict[str, Any]) -> int:
+        """Get severity level for an issue."""
+        code = issue.get('code', '').lower()
+        text = issue.get('text', '').lower()
+        
+        # Critical issues
+        if any(keyword in text for keyword in ['security', 'vulnerability', 'unsafe']):
+            return 4
+        if any(code.startswith(prefix) for prefix in ['S101', 'S105', 'S106', 'S107']):
+            return 4
+        
+        # High priority issues
+        if any(code.startswith(prefix) for prefix in ['F401', 'unused', 'no-unused']):
+            return 3
+        if 'no-console' in code:
+            return 3
+        
+        # Medium priority issues
+        if any(code.startswith(prefix) for prefix in ['E111', 'E112', 'indent']):
+            return 2
+        
+        # Low priority issues (formatting, style)
+        return 1
     
-    # Specific high-priority codes
-    high_priority_codes = ['E501', 'E302', 'E303', 'F401', 'F403', 'F405']
-    if any(code in issue.get('code', '') for code in high_priority_codes):
-        priority += 75
+    filtered = [issue for issue in issues if get_severity_level(issue) >= min_level]
+    return filtered
+
+def group_issues_by_type(issues: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Group issues by their type/category.
     
-    # Lower priority for formatting issues
-    if any(keyword in code or keyword in text for keyword in ['indent', 'whitespace', 'trailing']):
-        priority += 25
+    Args:
+        issues: List of linting issues
+        
+    Returns:
+        Dictionary mapping issue types to lists of issues
+    """
+    grouped = {}
     
-    return priority 
+    for issue in issues:
+        code = issue.get('code', 'unknown')
+        
+        # Determine issue type
+        if any(security_code in code for security_code in ['S101', 'S105', 'S106', 'S107']):
+            issue_type = 'security'
+        elif any(unused_code in code for unused_code in ['F401', 'unused', 'no-unused']):
+            issue_type = 'unused_code'
+        elif any(style_code in code for style_code in ['indent', 'E111', 'E112', 'quotes', 'semi']):
+            issue_type = 'style'
+        elif any(format_code in code for format_code in ['E501', 'max-len', 'printWidth']):
+            issue_type = 'formatting'
+        elif 'no-console' in code:
+            issue_type = 'debugging'
+        else:
+            issue_type = 'other'
+        
+        if issue_type not in grouped:
+            grouped[issue_type] = []
+        grouped[issue_type].append(issue)
+    
+    return grouped 
