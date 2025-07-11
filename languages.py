@@ -83,22 +83,33 @@ def detect_languages(repo_path: Path) -> Dict[str, List[Path]]:
     """
     languages = {}
     
-    # Create reverse mapping from extension to language
+    # Create reverse mapping from extension to language (optimized)
     ext_to_lang = {}
     for lang, exts in LANGUAGE_EXTENSIONS.items():
         for ext in exts:
             ext_to_lang[ext] = lang
     
-    # Walk through the repository
-    for root, dirs, files in os.walk(repo_path):
-        # Skip ignored directories
-        dirs[:] = [d for d in dirs if not should_ignore(Path(root) / d)]
+    # Use pathlib for more efficient file walking
+    try:
+        # Use rglob for more efficient recursive globbing
+        all_files = list(repo_path.rglob('*'))
+    except PermissionError:
+        # Fallback to os.walk if rglob fails
+        all_files = []
+        for root, dirs, files in os.walk(repo_path):
+            # Skip ignored directories
+            dirs[:] = [d for d in dirs if not should_ignore(Path(root) / d)]
+            for file in files:
+                all_files.append(Path(root) / file)
+    
+    # Process files in batches for better performance
+    batch_size = 1000
+    for i in range(0, len(all_files), batch_size):
+        batch = all_files[i:i + batch_size]
         
-        for file in files:
-            file_path = Path(root) / file
-            
-            # Skip ignored files
-            if should_ignore(file_path):
+        for file_path in batch:
+            # Skip directories and ignored files
+            if not file_path.is_file() or should_ignore(file_path):
                 continue
             
             # Check file extension

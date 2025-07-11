@@ -72,10 +72,14 @@ def build_prompt(file_path: Path, issues: List[Dict[str, Any]]) -> str:
         logger.error(f"Failed to read file {file_path}: {e}")
         return ""
     
-    # Format issues
-    issues_text = ""
-    for issue in issues:
-        issues_text += f"Line {issue.get('row', '?')}, Column {issue.get('col', '?')}: {issue.get('code', 'unknown')} - {issue.get('text', '')}\n"
+    # Compress code if it's too long
+    max_code_length = 8000  # characters
+    if len(code) > max_code_length:
+        logger.info(f"Code too long ({len(code)} chars), compressing...")
+        code = _compress_code(code, max_code_length)
+    
+    # Format issues (limit to most important ones)
+    issues_text = _format_issues_compressed(issues)
     
     # Load and format prompt template
     template = load_prompt_template()
@@ -86,6 +90,75 @@ def build_prompt(file_path: Path, issues: List[Dict[str, Any]]) -> str:
     )
     
     return prompt
+
+def _compress_code(code: str, max_length: int) -> str:
+    """Compress code while preserving important structure."""
+    lines = code.split('\n')
+    
+    if len(lines) <= 50:  # Keep all lines if file is small
+        return code
+    
+    # Keep first 20 lines, last 20 lines, and lines with issues
+    important_lines = set()
+    
+    # Add first and last lines
+    for i in range(min(20, len(lines))):
+        important_lines.add(i)
+        important_lines.add(len(lines) - 1 - i)
+    
+    # Add lines around issues (if we have them)
+    # This would be enhanced by passing issue line numbers
+    
+    # Build compressed code
+    compressed_lines = []
+    for i, line in enumerate(lines):
+        if i in important_lines:
+            compressed_lines.append(line)
+        elif i == 20:
+            compressed_lines.append("... (compressed)")
+        elif i == len(lines) - 20:
+            compressed_lines.append("... (compressed)")
+    
+    compressed_code = '\n'.join(compressed_lines)
+    
+    # If still too long, truncate
+    if len(compressed_code) > max_length:
+        compressed_code = compressed_code[:max_length] + "\n... (truncated)"
+    
+    return compressed_code
+
+def _format_issues_compressed(issues: List[Dict[str, Any]]) -> str:
+    """Format issues in a compressed way."""
+    if not issues:
+        return ""
+    
+    # Limit to most important issues (prioritize by severity)
+    max_issues = 10
+    if len(issues) > max_issues:
+        # Sort by priority (security > quality > style > formatting)
+        priority_order = {
+            'S': 4,  # Security
+            'F': 3,  # Fatal/Quality
+            'E': 2,  # Error/Style
+            'W': 1,  # Warning/Formatting
+        }
+        
+        def get_priority(issue):
+            code = issue.get('code', '')
+            if code:
+                prefix = code[0]
+                return priority_order.get(prefix, 0)
+            return 0
+        
+        issues = sorted(issues, key=get_priority, reverse=True)[:max_issues]
+        issues.append({'code': '...', 'text': f'and {len(issues) - max_issues} more issues'})
+    
+    # Format issues
+    issues_text = ""
+    for issue in issues:
+        issues_text += f"Line {issue.get('row', '?')}, Column {issue.get('col', '?')}: {issue.get('code', 'unknown')} - {issue.get('text', '')}\n"
+    
+    return issues_text
 
 def run_llama_cpp(prompt: str, model: str) -> Optional[str]:
     """
