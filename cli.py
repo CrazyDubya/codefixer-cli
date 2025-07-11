@@ -89,7 +89,7 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
     - HTML: htmlhint
     - CSS: stylelint
     
-    For more information, visit: https://github.com/your/codefixer-cli
+    For more information, visit: https://github.com/CrazyDubya/codefixer-cli
     """
     
     if verbose:

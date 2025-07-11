@@ -36,7 +36,7 @@
 pip install codefixer-cli
 
 # Or install from source
-git clone https://github.com/your/codefixer-cli.git
+git clone https://github.com/CrazyDubya/codefixer-cli.git
 cd codefixer-cli
 pip install -e .
 ```
@@ -281,7 +281,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your/codefixer-cli.git
+git clone https://github.com/CrazyDubya/codefixer-cli.git
 cd codefixer-cli
 
 # Create virtual environment
@@ -335,9 +335,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your/codefixer-cli/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your/codefixer-cli/discussions)
-- **Documentation**: [Wiki](https://github.com/your/codefixer-cli/wiki)
+- **Issues**: [GitHub Issues](https://github.com/CrazyDubya/codefixer-cli/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/CrazyDubya/codefixer-cli/discussions)
+- **Documentation**: [Wiki](https://github.com/CrazyDubya/codefixer-cli/wiki)
 
 ---
 

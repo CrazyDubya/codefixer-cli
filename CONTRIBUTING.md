@@ -53,7 +53,7 @@ We welcome feature suggestions! When suggesting a feature:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your/codefixer-cli.git
+git clone https://github.com/CrazyDubya/codefixer-cli.git
 cd codefixer-cli
 
 # Create virtual environment
@@ -255,9 +255,9 @@ Before releasing:
 
 ## 📞 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/your/codefixer-cli/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your/codefixer-cli/discussions)
-- **Documentation**: [Wiki](https://github.com/your/codefixer-cli/wiki)
+- **Issues**: [GitHub Issues](https://github.com/CrazyDubya/codefixer-cli/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/CrazyDubya/codefixer-cli/discussions)
+- **Documentation**: [Wiki](https://github.com/CrazyDubya/codefixer-cli/wiki)
 
 ## 🙏 Code of Conduct
 
