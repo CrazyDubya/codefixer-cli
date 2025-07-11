@@ -80,6 +80,7 @@ def build_prompt(file_path: Path, issues: List[Dict[str, Any]]) -> str:
     # Load and format prompt template
     template = load_prompt_template()
     prompt = template.format(
+        file_path=str(file_path),
         code=code,
         issues=issues_text.strip()
     )
@@ -253,7 +254,7 @@ def extract_code_from_response(response: str) -> str:
     
     # Basic validation - ensure we have some code content
     if not result.strip() or len(result.strip()) < 10:
-        return ""
+        return None
     
     return result
 
@@ -400,13 +401,13 @@ def list_llamacpp_models() -> List[str]:
             Path("/opt/llama.cpp/models")
         ]
         
-        models = []
+        models = set()
         for model_dir in model_dirs:
             if model_dir.exists():
                 for model_file in model_dir.glob("*.gguf"):
-                    models.append(model_file.stem)
+                    models.add(model_file.stem)
         
-        return models
+        return list(models)
     except Exception as e:
         logger.error(f"Error listing llama.cpp models: {e}")
         return [] 

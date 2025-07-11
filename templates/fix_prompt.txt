@@ -1,5 +1,7 @@
 You are a programming assistant. Below is a source code snippet and its lint errors:
 
+FILE: {file_path}
+
 SOURCE CODE:
 {code}
 

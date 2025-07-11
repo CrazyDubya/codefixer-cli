@@ -145,6 +145,27 @@ def hash_issue(issue: Dict[str, Any]) -> str:
     
     return '|'.join(parts)
 
+def create_issue_key(issue: Dict[str, Any]) -> str:
+    """
+    Create a unique key for an issue based on its properties.
+    
+    Args:
+        issue: Issue dictionary
+        
+    Returns:
+        Unique key string
+    """
+    # Create a string representation of the issue
+    parts = [
+        str(issue.get('path', '')),
+        str(issue.get('row', '')),
+        str(issue.get('col', '')),
+        str(issue.get('code', '')),
+        str(issue.get('text', ''))
+    ]
+    
+    return '|'.join(parts)
+
 def prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Prioritize issues based on severity and type.
@@ -171,7 +192,8 @@ def prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         'no-unused-vars': 50,
         'unused-import': 50,
         'F401': 50,  # Unused import
-        'no-console': 40,  # console.log usage
+        'F403': 50,  # Wildcard import
+        'no-console': 50,  # console.log usage
         'prefer-const': 45,  # Use const instead of let
         
         # Low priority - style issues
@@ -191,7 +213,7 @@ def prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     def get_priority(issue: Dict[str, Any]) -> int:
         """Get priority weight for an issue."""
-        code = issue.get('code', '').lower()
+        code = issue.get('code', '')
         
         # Check for security-related keywords
         if any(keyword in issue.get('text', '').lower() for keyword in ['security', 'vulnerability', 'unsafe', 'dangerous']):
@@ -199,7 +221,7 @@ def prioritize_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         
         # Check for specific codes
         for pattern, weight in priority_weights.items():
-            if pattern in code:
+            if pattern.lower() in code.lower():
                 return weight
         
         # Default priority
@@ -232,23 +254,23 @@ def filter_issues_by_severity(issues: List[Dict[str, Any]], min_severity: str = 
     
     def get_severity_level(issue: Dict[str, Any]) -> int:
         """Get severity level for an issue."""
-        code = issue.get('code', '').lower()
+        code = issue.get('code', '')
         text = issue.get('text', '').lower()
         
         # Critical issues
         if any(keyword in text for keyword in ['security', 'vulnerability', 'unsafe']):
             return 4
-        if any(code.startswith(prefix) for prefix in ['S101', 'S105', 'S106', 'S107']):
+        if any(prefix in code for prefix in ['S101', 'S105', 'S106', 'S107']):
             return 4
         
         # High priority issues
-        if any(code.startswith(prefix) for prefix in ['F401', 'unused', 'no-unused']):
+        if any(prefix in code for prefix in ['F401', 'F403', 'unused', 'no-unused']):
             return 3
         if 'no-console' in code:
             return 3
         
         # Medium priority issues
-        if any(code.startswith(prefix) for prefix in ['E111', 'E112', 'indent']):
+        if any(prefix in code for prefix in ['E111', 'E112', 'indent']):
             return 2
         
         # Low priority issues (formatting, style)
@@ -275,7 +297,7 @@ def group_issues_by_type(issues: List[Dict[str, Any]]) -> Dict[str, List[Dict[st
         # Determine issue type
         if any(security_code in code for security_code in ['S101', 'S105', 'S106', 'S107']):
             issue_type = 'security'
-        elif any(unused_code in code for unused_code in ['F401', 'unused', 'no-unused']):
+        elif any(unused_code in code for unused_code in ['F401', 'F403', 'unused', 'no-unused']):
             issue_type = 'unused_code'
         elif any(style_code in code for style_code in ['indent', 'E111', 'E112', 'quotes', 'semi']):
             issue_type = 'style'
