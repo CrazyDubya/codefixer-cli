@@ -21,9 +21,9 @@ from linters.yaml_linter import run_yaml_linter
 from linters.go_linter import GoLinter
 from linters.rust_linter import RustLinter
 from linters.java_linter import JavaLinter
-from linters.env_manager import EnvironmentManager
+from linters.env_manager import EnvManager
 from llm import generate_fix
-from git_utils import create_branch, apply_fixes, push_and_pr, commit_changes
+from git_utils import create_branch, apply_fixes, push_and_pr
 from logger import setup_logger
 
 logger = setup_logger()
@@ -327,7 +327,7 @@ def main(repo, branch, model, runner, no_push, dry_run, output, verbose, cleanup
             all_issues.update(issues)
         
         # Initialize environment manager and new linters
-        env_manager = EnvironmentManager()
+        env_manager = EnvManager()
         go_linter = GoLinter(env_manager)
         rust_linter = RustLinter(env_manager)
         java_linter = JavaLinter(env_manager)

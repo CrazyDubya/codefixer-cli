@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for additional languages (Rust, Go, Java, etc.)
 - Configurable linter rules and custom configurations
 - CI/CD integration helpers
-- Web interface for review and approval
+
 - Batch processing of multiple repositories
 - Interactive fix selection and approval
 - Integration with more LLM runners

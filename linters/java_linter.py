@@ -7,13 +7,13 @@ import subprocess
 import json
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
-from .env_manager import EnvironmentManager
+from .env_manager import EnvManager
 
 
 class JavaLinter:
     """Java linter using PMD and Checkstyle."""
     
-    def __init__(self, env_manager: EnvironmentManager):
+    def __init__(self, env_manager: EnvManager):
         self.env_manager = env_manager
         self.linter_name = "pmd-checkstyle"
         
