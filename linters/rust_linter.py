@@ -6,13 +6,13 @@ import os
 import subprocess
 import json
 from typing import List, Dict, Any, Optional
-from .env_manager import EnvironmentManager
+from .env_manager import EnvManager
 
 
 class RustLinter:
     """Rust linter using clippy."""
     
-    def __init__(self, env_manager: EnvironmentManager):
+    def __init__(self, env_manager: EnvManager):
         self.env_manager = env_manager
         self.linter_name = "clippy"
         

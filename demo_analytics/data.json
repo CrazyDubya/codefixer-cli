@@ -1,0 +1,21 @@
+{
+  "performance_summary": {},
+  "languages": {
+    "requirements": 1,
+    "yaml": 1,
+    "python": 2,
+    "html": 1,
+    "css": 1,
+    "npm": 1,
+    "typescript": 1,
+    "javascript": 2,
+    "dockerfile": 1,
+    "rust": 2,
+    "java": 1,
+    "go": 2,
+    "go_mod": 1,
+    "cargo": 1
+  },
+  "issues": {},
+  "timestamp": "2025-07-11T16:34:42.155013"
+}

@@ -61,9 +61,7 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
-# Flask stuff:
-instance/
-.webassets-cache
+# Flask stuff (removed - no longer needed)
 
 # Scrapy stuff:
 .scrapy

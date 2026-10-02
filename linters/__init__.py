@@ -2,28 +2,19 @@
 Linters module for codefixer.
 """
 
-from .python_linter import PythonLinter
-from .js_linter import JSLinter
-from .html_linter import HTMLLinter
-from .css_linter import CSSLinter
-from .yaml_linter import YamlLinter
-from .go_linter import GoLinter
-from .rust_linter import RustLinter
-from .java_linter import JavaLinter
-from .env_manager import EnvironmentManager
-from .parallel_linter import ParallelLinter
-from .incremental_linter import IncrementalLinter
+# Import functions instead of classes for compatibility
+from .python_linter import run_python_linter
+from .js_linter import run_js_linter
+from .html_linter import run_html_linter
+from .css_linter import run_css_linter
+from .yaml_linter import run_yaml_linter
+from .env_manager import EnvManager as EnvironmentManager
 
 __all__ = [
-    'PythonLinter',
-    'JSLinter', 
-    'HTMLLinter',
-    'CSSLinter',
-    'YamlLinter',
-    'GoLinter',
-    'RustLinter',
-    'JavaLinter',
-    'EnvironmentManager',
-    'ParallelLinter',
-    'IncrementalLinter'
+    'run_python_linter',
+    'run_js_linter', 
+    'run_html_linter',
+    'run_css_linter',
+    'run_yaml_linter',
+    'EnvironmentManager'
 ] 
