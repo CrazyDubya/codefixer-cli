@@ -167,15 +167,11 @@ class TestLanguageDetection:
         assert "css" in languages
         
         # Check that nested files are detected
-        python_files = [str(f) for f in languages["python"]]
-        assert any("src/main.py" in f for f in python_files)
-        assert any("src/utils.py" in f for f in python_files)
-        
-        js_files = [str(f) for f in languages["javascript"]]
-        assert any("src/frontend/app.js" in f for f in js_files)
-        
-        css_files = [str(f) for f in languages["css"]]
-        assert any("src/frontend/style.css" in f for f in css_files) 
+        python_files = languages["python"]
+        assert (temp_repo / "src" / "main.py") in python_files
+        assert (temp_repo / "src" / "utils.py") in python_files
+        assert (temp_repo / "src" / "frontend" / "app.js") in languages["javascript"]
+        assert (temp_repo / "src" / "frontend" / "style.css") in languages["css"]
 
     def test_detect_go_files(self, temp_repo):
         """Test detection of Go files."""
