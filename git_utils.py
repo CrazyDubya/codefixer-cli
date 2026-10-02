@@ -444,6 +444,40 @@ def push_and_pr(repo_path: Path, branch_name: str, commit_message: str, fixes: D
         logger.error(f"Error in push_and_pr: {e}")
         return False
 
+
+def get_current_branch(repo_path: Path) -> Optional[str]:
+    """Return the active branch name, or None if unavailable."""
+    try:
+        repo = Repo(repo_path)
+        if not repo.head.is_valid():
+            return None
+        return repo.active_branch.name
+    except Exception as e:
+        logger.error(f"Could not determine current branch: {e}")
+        return None
+
+
+def commit_changes(repo_path: Path, commit_message: str) -> bool:
+    """
+    Stage and commit any pending changes.
+
+    If the working tree is already clean (e.g. apply_fixes already committed),
+    treat that as success so callers can share one commit path.
+    """
+    try:
+        repo = Repo(repo_path)
+        if not repo.is_dirty(untracked_files=True):
+            logger.info("No uncommitted changes to commit")
+            return True
+        repo.git.add(A=True)
+        repo.index.commit(commit_message)
+        logger.info(f"Committed changes: {commit_message}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to commit changes: {e}")
+        return False
+
+
 def create_pull_request(repo_path: Path, branch_name: str, title: str, body: str = "") -> bool:
     """
     Create a pull request using GitHub CLI.

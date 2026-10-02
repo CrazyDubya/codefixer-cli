@@ -7,6 +7,13 @@ import time
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+# Skip whole module when analytics extras are not installed (CI installs them via workflow).
+pytest.importorskip("numpy")
+pytest.importorskip("matplotlib")
+pytest.importorskip("seaborn")
+pytest.importorskip("pandas")
+pytest.importorskip("psutil")
 import numpy as np
 
 from performance_monitor import (

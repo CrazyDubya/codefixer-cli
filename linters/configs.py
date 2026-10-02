@@ -119,21 +119,21 @@ TS_TSLINT_CONFIG = {
         "tslint:recommended"
     ],
     "rules": {
-        "indent": [true, "spaces", 2],
-        "quotemark": [true, "single"],
-        "semicolon": [true, "always"],
-        "no-unused-variable": true,
-        "no-console": [true, "log", "warn", "error"],
-        "prefer-const": true,
-        "no-var-keyword": true,
-        "arrow-parens": [true, "always"],
-        "trailing-comma": [true, {"multiline": "always", "singleline": "never"}],
-        "object-literal-sort-keys": false,
-        "interface-name": [true, "never-prefix"],
-        "member-access": [true, "no-public"],
-        "no-empty": [true, "allow-empty-catch"],
-        "no-consecutive-blank-lines": [true, 1],
-        "max-line-length": [true, 88]
+        "indent": [True, "spaces", 2],
+        "quotemark": [True, "single"],
+        "semicolon": [True, "always"],
+        "no-unused-variable": True,
+        "no-console": [True, "log", "warn", "error"],
+        "prefer-const": True,
+        "no-var-keyword": True,
+        "arrow-parens": [True, "always"],
+        "trailing-comma": [True, {"multiline": "always", "singleline": "never"}],
+        "object-literal-sort-keys": False,
+        "interface-name": [True, "never-prefix"],
+        "member-access": [True, "no-public"],
+        "no-empty": [True, "allow-empty-catch"],
+        "no-consecutive-blank-lines": [True, 1],
+        "max-line-length": [True, 88]
     }
 }
 

@@ -23,7 +23,7 @@ from linters.rust_linter import RustLinter
 from linters.java_linter import JavaLinter
 from linters.env_manager import EnvManager
 from llm import generate_fix
-from git_utils import create_branch, apply_fixes, push_and_pr
+from git_utils import create_branch, apply_fixes, push_and_pr, commit_changes
 from logger import setup_logger
 
 logger = setup_logger()
