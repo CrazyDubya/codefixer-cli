@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
+import matplotlib
+
+# Charts are written to files; force a non-interactive backend so CI/headless
+# runners (notably Windows Python 3.11/3.12 with broken Tk) never need tkinter.
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.figure import Figure
