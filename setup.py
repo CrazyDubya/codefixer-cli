@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='codefixer-cli',
     version='0.1.0',
-    py_modules=['cli', 'languages', 'llm', 'git_utils', 'logger'],
+    py_modules=['cli', 'languages', 'llm', 'git_utils', 'logger', 'config_manager', 'issue_deduplicator'],
     packages=['linters', 'templates'],
     install_requires=[
         'click>=8.0.0',
@@ -20,6 +20,7 @@ setup(
         ],
     },
     include_package_data=True,
+    package_data={'templates': ['fix_prompt.txt']},
     description='Local-only CLI for automated code fixing with local LLM and best-practice linters.',
     author='Your Name',
     author_email='your@email.com',
