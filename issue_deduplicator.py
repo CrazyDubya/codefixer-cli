@@ -8,6 +8,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def normalize_issue_fields(issue: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return a copy of an issue that has the row/col/text keys the rest of the
+    pipeline reads. The Go, Java and Rust linters emit line/column/message;
+    the Python, HTML, CSS and JS linters emit row/col/text. Existing values win.
+    """
+    normalized = dict(issue)
+    for target, source in (('row', 'line'), ('col', 'column'), ('text', 'message')):
+        if target not in normalized and source in normalized:
+            normalized[target] = normalized[source]
+    return normalized
+
 def deduplicate_issues(issues: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
     """
     Deduplicate linting issues by merging similar ones.
@@ -23,6 +35,7 @@ def deduplicate_issues(issues: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Lis
     for file_path, file_issues in issues.items():
         if not file_issues:
             continue
+        file_issues = [normalize_issue_fields(i) for i in file_issues]
         
         # Group issues by position and code
         issue_groups = {}
